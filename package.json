@@ -1,5 +1,5 @@
 {
-  "name": "asyncfn",
+  "name": "annosync",
   "version": "1.0.0",
   "description": "A non-intrusive minimalistic helper for working with asynchronous Javascript",
   "main": "index.js",
