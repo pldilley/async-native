@@ -1,2 +1,1 @@
-var annosync = require('./src/annosync.js');
-console.log('test2');
+var annosync = require('./src/async-native.js');
