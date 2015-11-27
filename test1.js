@@ -1,11 +1,11 @@
-var annosync = require('./src/async-native.js');
+var $aysnc = require('./src/async-native.js').closure(($a) => eval($a));
 
 global.testSleep = function(delay, callback) {
   setTimeout(function() {
     callback(null, "This is my test");
   }, delay);
 };
-
+    var mySpecialScope = "tooWoo";
 module.exports = {
   myFn: function(a, b, c) {
     console.log(a, b, c);
@@ -18,7 +18,8 @@ module.exports = {
     console.log(1, $myTest);
     console.log(2, $myTest2);
     console.log(3, $myTest3);
+
   }
 };
 
-annosync.register(module);
+$aysnc.register(module);
