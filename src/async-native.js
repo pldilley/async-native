@@ -7,13 +7,6 @@
  */
 
 /**
- * Escape special characters in the given string of html.
- *
- * @param  {String} html
- * @return {String}
- */
-
-/**
  * Must be using a version of node that supports generators or enables them
  */
 try {
@@ -47,7 +40,13 @@ var asyncYield = '\nyield 1';
  */
 var functionRegExp = /(function[ ]*?\(.*?\)[ ]*?\{)/;
 
-// Global function to help restart iters after a callback completes
+/**
+ * Global function to help restart Iterators after a callback completes
+ *
+ * @param  {String | Error} e           The error passed by the callback or null
+ * @param  {<Iterator>} asyncIter       Internal: The generator's iterator
+ * @throws:iterator {FutureError}       If the callback is passed an error
+ */
 global.nextAsyncNative = function(e, asyncIter) {
   if (!e) {
     asyncIter.next();
@@ -62,32 +61,61 @@ global.nextAsyncNative = function(e, asyncIter) {
 };
 
 module.exports = {
-  closure: function(evalFn) {
+  /**
+   * Returns a register object bound to a evalFn function that can capture
+   * the Lexical Context of the original module
+   *
+   * @param  {Function} evalFn    A specific function that returns eval's result
+   * @param  {boolean} outputFns  true to output function strings for debugging
+   * @return {Object} register    register function bound to the passed function
+   * @throws {ParseError}         If the passed function is not a function
+   */
+  configure: function(evalFn, outputFns) {
     if (HELPERS.isFunction(evalFn)) {
-      return module.exports.register.bind({ closureEvalFn: evalFn});
+      return {
+        process: process.bind({ evalFn: evalFn, outputFns: !!outputFns }),
+        ParseError: HELPERS.ParseError,
+        FutureError: HELPERS.FutureError
+      };
     } else {
-      throw new HELPERS.ParseError('Closure function is not a function:\n' +
+      throw new HELPERS.ParseError('"eval" function is not a function:\n' +
         (evalFn && evalFn.toString) ? evalFn.toString() : '<?>');
     }
-  },
+  }
+};
 
-  register: function(obj, closureCapture) {
-    closureCapture = closureCapture || this.closureCapture;
-
-    for (var itemName in obj) {
+/**
+ * Processes all functions in a passed object, getting them into the Lexical
+ * Scope of the original method by using a evalFn function
+ *
+ * @this   {Scope} this      The scope should contain a evalFn function
+ * @param  {Object} evalFn   The object containing async functions
+ */
+function process(obj) {
+  for (var itemName in obj) {
+    if (HELPERS.isFunction(obj[itemName])) {
       var fnString = obj[itemName].toString();
 
       // We only need to re-write the function if it contains instances
       if (fnString.match(asyncRegExp)) {
         var newCode = rewriteFunction(itemName, fnString);
-        obj[itemName] = closureCapture('(' + newCode + ')');
+        obj[itemName] = this.evalFn('(' + newCode + ')');
 
-        console.log('\n\n' + obj[itemName.toString() + '\n\n');
+        if (this.outputFns) {
+          HELPERS.debugFunction(obj[itemName]);
+        }
       }
     }
   }
-};
+}
 
+/**
+ * Rewrites a specific function string into a Generator
+ *
+ * @param  {String} fnName    The name (or key) of the function
+ * @return {String} fnString  The string source of the function
+ * @returns {String}          The string result of processing the function
+ */
 function rewriteFunction(fnName, fnString) {
   // All the source could be on one line potentially, so let's always do it
   var asyncVarList = ['asyncIter'];
@@ -97,9 +125,15 @@ function rewriteFunction(fnName, fnString) {
   return HELPERS.uncleanNewLines(fnCollapsed);
 };
 
+
+
 var HELPERS = {
   isFunction: function(fn) {
     return typeof fn === 'function';
+  },
+
+  debugFunction: function(fn) {
+    console.log('\n\n\n' + fn.toString() + '\n\n\n');
   },
 
   cleanNewLineAndComments: function(fnString) {
@@ -112,6 +146,15 @@ var HELPERS = {
     return fnString.replace(newLineRegExp, '\n');
   },
 
+  /**
+   * Rewrites all of the placeholder into callbacks and adds the yield keywords
+   * at the next proceeding ';' after each placeholder
+   *
+   * @param  {String} fnName                  The name (or key) of the function
+   * @return {String} fnStr                   The string source of the function
+   * @return {Array<String>} asyncVarList     Array to append variable names to
+   * @returns {String}                        The processing string result
+   */
   rewritePlaceholders: function(fnName, fnStr, asyncVarList) {
      var match;
 
@@ -122,7 +165,7 @@ var HELPERS = {
        // There must be a colon after the placeholder, otherwise the programmer
        // has messed up
        if (afterPlaceholderParts.length < 2) {
-         throw new HELPERS.ParseError('No semi-colon after ' + match[0], fnName);
+         throw new HELPERS.ParseError('No semicolon after ' + match[0], fnName);
        }
 
        // Add the matched variable (without brackets) to a definition list
@@ -141,6 +184,13 @@ var HELPERS = {
      return fnStr;
   },
 
+  /**
+   * Rewrites the function into a generaotr
+   *
+   * @return {String} fnCollapsed             The string source of the function
+   * @return {Array<String>} asyncVarList     Array for variable definitions
+   * @returns {String}                        The processing string result
+   */
   transformFnToGenerator: function (fnCollapsed, asyncVarList) {
     var wrappedFn = fnCollapsed.replace(functionRegExp, '$1' +
       '\nvar ' + asyncVarList.join(', ') + ';' +
@@ -152,12 +202,19 @@ var HELPERS = {
     return wrappedFn + '\n}\n';
   },
 
+  /**
+   * Error for processing errors
+   */
   ParseError: function ParseError(message, fnKey) {
      Error.captureStackTrace(this);
      var msg = '\n\n\n --> async-native: Unable to parse!\n "' + fnKey + '"\n';
      this.message = msg + message;
      this.name = "ParseError";
   },
+
+  /**
+   * Error for callback errors
+   */
   FutureError: function FutureError(message) {
      Error.captureStackTrace(this);
      var msg = 'async-native: A callback returned an error\n';
@@ -168,10 +225,3 @@ var HELPERS = {
 
 HELPERS.ParseError.prototype = Object.create(Error.prototype);
 HELPERS.FutureError.prototype = Object.create(Error.prototype);
-
-// Takes a passed match and mass replaces it with the appropriate variable name
-
-
-
-// Wraps the current function code into a generator and adds the necessary code
-// to execute it

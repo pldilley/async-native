@@ -1,11 +1,13 @@
-var $aysnc = require('./src/async-native.js').closure(($a) => eval($a));
+var aysncNative = require('./src/async-native.js').configure(($a) => eval($a));
 
-global.testSleep = function(delay, callback) {
+var testSleep = function(delay, callback) {
   setTimeout(function() {
     callback(null, "This is my test");
   }, delay);
 };
-    var mySpecialScope = "tooWoo";
+
+var mySpecialScope = "tooWoo";
+
 module.exports = {
   myFn: function(a, b, c) {
     console.log(a, b, c);
@@ -22,4 +24,4 @@ module.exports = {
   }
 };
 
-$aysnc.register(module);
+aysncNative.process(module.exports);
