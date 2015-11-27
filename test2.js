@@ -1,1 +1,0 @@
-var annosync = require('./src/async-native.js');

@@ -6,15 +6,42 @@
  * Licensed under the GPL and LGPL license.
  */
 
+var ERRORS = {
+  /**
+   * Error for processing errors
+   */
+  ParseError: function ParseError(message, fnKey) {
+     Error.captureStackTrace(this);
+     var msg = 'async-native - Unable to parse! ' +
+      (fnKey ? '("' + fnKey + '")' : '') + '\n';
+     this.message = msg + '            ' + message;
+     this.name = "ParseError";
+  },
+
+  /**
+   * Error for callback errors
+   */
+  FutureError: function FutureError(message) {
+     Error.captureStackTrace(this);
+     var msg = 'async-native - A callback returned an error\n';
+     this.message = msg + message;
+     this.name = "FutureError";
+  }
+};
+ERRORS.ParseError.prototype = Object.create(Error.prototype);
+ERRORS.FutureError.prototype = Object.create(Error.prototype);
+
+
 /**
  * Must be using a version of node that supports generators or enables them
  */
 try {
   eval('(function *(){})');
 } catch(err) {
-  throw new HELPERS.ParseError('Missing Generators ES6 support',
+  throw new ERRORS.ParseError('Missing Generators ES6 support',
     '--harmony_generators');
 }
+
 
 /**
  * Relates to newlines and comment cleaning
@@ -24,21 +51,21 @@ try {
 var newLinePlaceholder = '<{NEW_LINE}>';
 var newLineRegExp = /<\{NEW_LINE\}>/g;
 var lineComment = /\/\/.*?;.*?\n/g;
-var multiLineComment = /\/\*.*?;.*?\*\//g;
+var multiLineComment = /\/\*(\n|.)*?\*\//g;
 
 /**
  * Relates to placeholders and yields
  * - Placeholders get replaced with callback functions
  * - Yields are replaced after the placeholder's next nearest ';'
  */
-var asyncRegExp = /\{(\$[\w$]+?)\}/;
+var asyncRegExp = /\{(\$[\w\$]+?)\}/;
 var asyncReplace = 'function(e, r) { $1 = r; nextAsyncNative(e, asyncIter); }';
 var asyncYield = '\nyield 1';
 
 /**
  * Relates to wrapping the function up into a Generator
  */
-var functionRegExp = /(function[ ]*?\(.*?\)[ ]*?\{)/;
+var functionRegExp = /(function.*?\{)/;
 
 /**
  * Global function to help restart Iterators after a callback completes
@@ -52,7 +79,7 @@ global.nextAsyncNative = function(e, asyncIter) {
     asyncIter.next();
   } else {
     var eIsError = e instanceof Error;
-    var error = new HELPERS.FutureError(eIsError ? e.message : e);
+    var error = new ERRORS.FutureError(eIsError ? e.message : e);
     if (eIsError) {
       error.prototype = e.prototype;
     }
@@ -74,12 +101,12 @@ module.exports = {
     if (HELPERS.isFunction(evalFn)) {
       return {
         process: process.bind({ evalFn: evalFn, outputFns: !!outputFns }),
-        ParseError: HELPERS.ParseError,
-        FutureError: HELPERS.FutureError
+        ParseError: ERRORS.ParseError,
+        FutureError: ERRORS.FutureError
       };
     } else {
-      throw new HELPERS.ParseError('"eval" function is not a function:\n' +
-        (evalFn && evalFn.toString) ? evalFn.toString() : '<?>');
+      throw new ERRORS.ParseError('"eval" function is not a function:\n\n' +
+        ((evalFn && evalFn.toString) ? evalFn.toString() : '<?>') + '\n');
     }
   }
 };
@@ -133,7 +160,8 @@ var HELPERS = {
   },
 
   debugFunction: function(fn) {
-    console.log('\n\n\n' + fn.toString() + '\n\n\n');
+    console.log('\n\n----------------------------\n\n' +
+      fn.toString() + '\n\n----------------------------\n\n');
   },
 
   cleanNewLineAndComments: function(fnString) {
@@ -156,32 +184,32 @@ var HELPERS = {
    * @returns {String}                        The processing string result
    */
   rewritePlaceholders: function(fnName, fnStr, asyncVarList) {
-     var match;
+    var match;
 
-     while (match = fnStr.match(asyncRegExp)) {
-       var matchIndex = fnStr.indexOf(match[0]);
-       var afterPlaceholderParts = fnStr.substring(matchIndex).split(';');
+    while (match = fnStr.match(asyncRegExp)) {
+      var matchIndex = fnStr.indexOf(match[0]);
+      var afterPlaceholderParts = fnStr.substring(matchIndex).split(';');
 
-       // There must be a colon after the placeholder, otherwise the programmer
-       // has messed up
-       if (afterPlaceholderParts.length < 2) {
-         throw new HELPERS.ParseError('No semicolon after ' + match[0], fnName);
-       }
+      // There must be a colon after the placeholder, otherwise the programmer
+      // has messed up
+      if (afterPlaceholderParts.length < 2) {
+        throw new ERRORS.ParseError('No semicolon after ' + match[0], fnName);
+      }
 
-       // Add the matched variable (without brackets) to a definition list
-       if (asyncVarList.indexOf(match[1]) === -1) {
-         asyncVarList.push(match[1]);
-       }
+      // Add the matched variable (without brackets) to a definition list
+      if (asyncVarList.indexOf(match[1]) === -1) {
+        asyncVarList.push(match[1]);
+      }
 
-       // Insert yield after the first colon found, after the placeholder
-       afterPlaceholderParts.splice(1, 0, asyncYield);
-       fnStr = fnStr.substring(0, matchIndex) + afterPlaceholderParts.join(';');
+      // Insert yield after the first colon found, after the placeholder
+      afterPlaceholderParts.splice(1, 0, asyncYield);
+      fnStr = fnStr.substring(0, matchIndex) + afterPlaceholderParts.join(';');
 
-       // Replace the placeholder with a callback
-       fnStr = fnStr.replace(asyncRegExp, asyncReplace);
-     }
+      // Replace the placeholder with a callback
+      fnStr = fnStr.replace(asyncRegExp, asyncReplace);
+    }
 
-     return fnStr;
+    return fnStr;
   },
 
   /**
@@ -200,28 +228,5 @@ var HELPERS = {
                  '\nasyncIter.next();';
 
     return wrappedFn + '\n}\n';
-  },
-
-  /**
-   * Error for processing errors
-   */
-  ParseError: function ParseError(message, fnKey) {
-     Error.captureStackTrace(this);
-     var msg = '\n\n\n --> async-native: Unable to parse!\n "' + fnKey + '"\n';
-     this.message = msg + message;
-     this.name = "ParseError";
-  },
-
-  /**
-   * Error for callback errors
-   */
-  FutureError: function FutureError(message) {
-     Error.captureStackTrace(this);
-     var msg = 'async-native: A callback returned an error\n';
-     this.message = msg + message;
-     this.name = "FutureError";
   }
 };
-
-HELPERS.ParseError.prototype = Object.create(Error.prototype);
-HELPERS.FutureError.prototype = Object.create(Error.prototype);
