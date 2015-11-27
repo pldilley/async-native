@@ -10,6 +10,7 @@ var testSleep = function(delay, callback) {
 module.exports = {
   seriesExample: function(callback) {
     console.log('\n\nSeries example:\n');
+
     testSleep(3000, {$myTest1}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
     console.log('exampleFn1', $myTest1);
 
@@ -42,9 +43,12 @@ module.exports = {
 
   asyncErrorExample: function(callback) {
     console.log('\n\nError example:\n');
+
     setTimeout(function() {
-      callback(new Error("This is a test error"));
+      callback(new Error("This is a delayed test error"));
     }, 1000);
+
+    //callback(new Error("This is an immediate test error")); // Handled too
   },
 
   _callExamplesAsynchronously: function() {

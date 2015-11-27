@@ -29,7 +29,6 @@ var ERRORS = {
   }
 };
 ERRORS.ParseError.prototype = Object.create(Error.prototype);
-ERRORS.FutureError.prototype = Object.create(Error.prototype);
 
 
 /**
@@ -48,24 +47,28 @@ try {
  * - The actual processing is done with the the function on one line
  * - Comments containing ';' confuse things, so we also remove those
  */
-var newLinePlaceholder = '<{NEW_LINE}>';
-var newLineRegExp = /<\{NEW_LINE\}>/g;
-var lineComment = /\/\/.*?;.*?\n/g;
-var multiLineComment = /\/\*(\n|.)*?\*\//g;
+var NEW_LINE_PLACEHOLDER = '<{NEW_LINE}>';
+var NEWLINE_REGEXP = /<\{NEW_LINE\}>/g;
+var LINE_COMMENTS_WITH_COLON = /\/\/.*?;.*?\n/g;
+var ALL_MULTILINE_COMMENTS = /\/\*(\n|.)*?\*\//g;
 
 /**
  * Relates to placeholders and yields
  * - Placeholders get replaced with callback functions
  * - Yields are replaced after the placeholder's next nearest ';'
  */
-var asyncRegExp = /\{(\$[\w\$]+?)\}/;
-var asyncReplace = 'function(e, r) { $1 = r; nextAsyncNative(e, asyncIter); }';
-var asyncYield = '\nyield 1';
+var ASYNC_PLACEHOLDER_REGEXP = /\{(\$[\w\$]+?)\}/;
+var ASYNC_REPLACE = 'function(e, r) { $1 = r; nextAsyncNative(e, asyncIter); }';
+var ASYNC_YIELD = '\nyield 1';
 
 /**
  * Relates to wrapping the function up into a Generator
  */
-var functionRegExp = /(function.*?\{)/;
+var FUNCTION_REGEXP = /(function.*?\{)/;
+var FUNCTION_GENERATOR = '\nfunction* yielder() { ';
+var FUNCTION_ITERATOR = '\nasyncIter = yielder.apply(this, arguments);' +
+                        '\nasyncIter.next();\n}\n';
+
 
 /**
  * Global function to help restart Iterators after a callback completes
@@ -75,15 +78,28 @@ var functionRegExp = /(function.*?\{)/;
  * @throws:iterator {FutureError}       If the callback is passed an error
  */
 global.nextAsyncNative = function(e, asyncIter) {
-  if (!e) {
-    asyncIter.next();
-  } else {
-    var eIsError = e instanceof Error;
-    var error = new ERRORS.FutureError(eIsError ? e.message : e);
-    if (eIsError) {
-      error.prototype = e.prototype;
+  if (!asyncIter.errored) {
+    if (!e) {
+      asyncIter.next();
+    } else {
+      var eIsError = e instanceof Error;
+      var error = new ERRORS.FutureError(eIsError ? e.message : e);
+      error.prototype = eIsError ? e.prototype : Object.create(Error.prototype);
+
+      try {
+        // This assumes that the callback is in a different call chain from
+        // iter.next() - i.e. that it truly is an asynchronous callback
+        asyncIter.errored = true;
+        asyncIter.throw(error);
+      } catch(e) {
+        // This assumes that trying to throw the error lead to the Generator
+        // complaining about trying to do iter.throw whilst iter.next is still
+        // going. This is because we're trying to call iter.throw in the same
+        // call chain as we just called iter.next - which isn't allowed.
+        // In this case, we can simply throw the error back up the chain.
+        throw (e instanceof TypeError) ? error : e;
+      }
     }
-    asyncIter.throw(error);
   }
 };
 
@@ -124,7 +140,7 @@ function process(obj) {
       var fnString = obj[itemName].toString();
 
       // We only need to re-write the function if it contains instances
-      if (fnString.match(asyncRegExp)) {
+      if (fnString.match(ASYNC_PLACEHOLDER_REGEXP)) {
         var newCode = rewriteFunction(itemName, fnString);
         obj[itemName] = this.evalFn('(' + newCode + ')');
 
@@ -165,13 +181,13 @@ var HELPERS = {
   },
 
   cleanNewLineAndComments: function(fnString) {
-    return fnString.replace(lineComment, '')
-      .replace(/\n/g, newLinePlaceholder)
-      .replace(multiLineComment, '');
+    return fnString.replace(LINE_COMMENTS_WITH_COLON, '')
+      .replace(/\n/g, NEW_LINE_PLACEHOLDER)
+      .replace(ALL_MULTILINE_COMMENTS, '');
   },
 
   uncleanNewLines: function(fnString) {
-    return fnString.replace(newLineRegExp, '\n');
+    return fnString.replace(NEWLINE_REGEXP, '\n');
   },
 
   /**
@@ -186,7 +202,7 @@ var HELPERS = {
   rewritePlaceholders: function(fnName, fnStr, asyncVarList) {
     var match;
 
-    while (match = fnStr.match(asyncRegExp)) {
+    while (match = fnStr.match(ASYNC_PLACEHOLDER_REGEXP)) {
       var matchIndex = fnStr.indexOf(match[0]);
       var afterPlaceholderParts = fnStr.substring(matchIndex).split(';');
 
@@ -202,11 +218,11 @@ var HELPERS = {
       }
 
       // Insert yield after the first colon found, after the placeholder
-      afterPlaceholderParts.splice(1, 0, asyncYield);
+      afterPlaceholderParts.splice(1, 0, ASYNC_YIELD);
       fnStr = fnStr.substring(0, matchIndex) + afterPlaceholderParts.join(';');
 
       // Replace the placeholder with a callback
-      fnStr = fnStr.replace(asyncRegExp, asyncReplace);
+      fnStr = fnStr.replace(ASYNC_PLACEHOLDER_REGEXP, ASYNC_REPLACE);
     }
 
     return fnStr;
@@ -220,13 +236,9 @@ var HELPERS = {
    * @returns {String}                        The processing string result
    */
   transformFnToGenerator: function (fnCollapsed, asyncVarList) {
-    var wrappedFn = fnCollapsed.replace(functionRegExp, '$1' +
-      '\nvar ' + asyncVarList.join(', ') + ';' +
-      '\nfunction* yielder() { ');
+    var wrappedFn = fnCollapsed.replace(FUNCTION_REGEXP, '$1' +
+      '\nvar ' + asyncVarList.join(', ') + ';' + FUNCTION_GENERATOR);
 
-    wrappedFn += '\nasyncIter = yielder.apply(this, arguments);' +
-                 '\nasyncIter.next();';
-
-    return wrappedFn + '\n}\n';
+    return wrappedFn + FUNCTION_ITERATOR;
   }
 };
