@@ -6,29 +6,28 @@
  * Licensed under the GPL and LGPL license.
  */
 
-var ERRORS = {
-  /**
-   * Error for processing errors
-   */
-  ParseError: function ParseError(message, fnKey) {
-     Error.captureStackTrace(this);
-     var msg = 'async-native - Unable to parse! ' +
-      (fnKey ? '("' + fnKey + '")' : '') + '\n';
-     this.message = msg + '            ' + message;
-     this.name = "ParseError";
-  },
 
-  /**
-   * Error for callback errors
-   */
-  FutureError: function FutureError(message) {
-     Error.captureStackTrace(this);
-     var msg = 'async-native - A callback returned an error\n';
-     this.message = msg + message;
-     this.name = "FutureError";
-  }
+/**
+ * Error for processing errors
+ */
+ParseError = function ParseError(message, fnKey) {
+   Error.captureStackTrace(this);
+   var msg = 'async-native - Unable to parse! ' +
+    (fnKey ? '("' + fnKey + '")' : '') + '\n';
+   this.message = msg + '            ' + message;
+   this.name = "ParseError";
 };
-ERRORS.ParseError.prototype = Object.create(Error.prototype);
+
+/**
+ * Error for callback errors
+ */
+FutureError = function FutureError(message) {
+   Error.captureStackTrace(this);
+   var msg = 'async-native - A callback returned an error\n';
+   this.message = msg + message;
+   this.name = "FutureError";
+};
+ParseError.prototype = Object.create(Error.prototype);
 
 
 /**
@@ -37,9 +36,10 @@ ERRORS.ParseError.prototype = Object.create(Error.prototype);
 try {
   eval('(function *(){})');
 } catch(err) {
-  throw new ERRORS.ParseError('Missing Generators ES6 support',
+  throw new ParseError('Missing Generators ES6 support',
     '--harmony_generators');
 }
+
 
 
 /**
@@ -58,16 +58,19 @@ var ALL_MULTILINE_COMMENTS = /\/\*(\n|.)*?\*\//g;
  * - Yields are replaced after the placeholder's next nearest ';'
  */
 var ASYNC_PLACEHOLDER_REGEXP = /\{(\$[\w\$]+?)\}/;
-var ASYNC_REPLACE = 'function(e, r) { $1 = r; nextAsyncNative(e, asyncIter); }';
+var ASYNC_REPLACE = 'function(e, r) { $1 = r; nextAsyncNative(e, $it, "$1"); }';
 var ASYNC_YIELD = '\nyield 1';
 
 /**
- * Relates to wrapping the function up into a Generator
+ * Relates to wrapping the function up into a Generator and validation
  */
+var SPLIT_FUNCTION_REGEXP = /function.*?\{/g;
 var FUNCTION_REGEXP = /(function.*?\{)/;
 var FUNCTION_GENERATOR = '\nfunction* yielder() { ';
-var FUNCTION_ITERATOR = '\nasyncIter = yielder.apply(this, arguments);' +
-                        '\nasyncIter.next();\n}\n';
+var FUNCTION_ITERATOR = '\n$it = yielder.apply(this, arguments);' +
+                        '\n$it.complete = [];' +
+                        '\n$it.next();\n}\n';
+
 
 
 /**
@@ -76,32 +79,36 @@ var FUNCTION_ITERATOR = '\nasyncIter = yielder.apply(this, arguments);' +
  * @param  {String | Error} e           The error passed by the callback or null
  * @param  {<Iterator>} asyncIter       Internal: The generator's iterator
  * @throws:iterator {FutureError}       If the callback is passed an error
+ * @throws {Error}                      If the callback causes an unknown error
  */
-global.nextAsyncNative = function(e, asyncIter) {
-  if (!asyncIter.errored) {
-    if (!e) {
-      asyncIter.next();
-    } else {
-      var eIsError = e instanceof Error;
-      var error = new ERRORS.FutureError(eIsError ? e.message : e);
-      error.prototype = eIsError ? e.prototype : Object.create(Error.prototype);
-
-      try {
-        // This assumes that the callback is in a different call chain from
-        // iter.next() - i.e. that it truly is an asynchronous callback
-        asyncIter.errored = true;
-        asyncIter.throw(error);
-      } catch(e) {
-        // This assumes that trying to throw the error lead to the Generator
-        // complaining about trying to do iter.throw whilst iter.next is still
-        // going. This is because we're trying to call iter.throw in the same
-        // call chain as we just called iter.next - which isn't allowed.
-        // In this case, we can simply throw the error back up the chain.
-        throw (e instanceof TypeError) ? error : e;
+nextAsyncNative = function(e, $it, varName) {
+  if ($it.complete.indexOf(varName) === -1) {
+    try {
+      if (!e) {
+        $it.next();
+      } else {
+        var eIsErr = e instanceof Error;
+        var error = new FutureError(eIsErr ? e.message : e);
+        error.prototype = eIsErr ? e.prototype : Object.create(Error.prototype);
+        $it.throw(error);
+      }
+      $it.complete.push(varName);
+    } catch(f) {
+      // A TypeError happens if the callback is immediately called in the same
+      // call stack that the asynchronous function was called. The yield has to
+      // be hit first before the generator can continue. Shift to another stack
+      if (f instanceof TypeError) {
+        setTimeout(global.nextAsyncNative.bind(this, e, $it, varName), 0);
+      } else {
+        throw f;
       }
     }
+  } else {
+    throw new ParseError('The same callback was called twice', varName);
   }
 };
+
+
 
 module.exports = {
   /**
@@ -113,19 +120,17 @@ module.exports = {
    * @return {Object} register    register function bound to the passed function
    * @throws {ParseError}         If the passed function is not a function
    */
-  configure: function(evalFn, outputFns) {
+  init: function(evalFn, outputFns) {
     if (HELPERS.isFunction(evalFn)) {
-      return {
-        process: process.bind({ evalFn: evalFn, outputFns: !!outputFns }),
-        ParseError: ERRORS.ParseError,
-        FutureError: ERRORS.FutureError
-      };
+      return process.bind({ evalFn: evalFn, outputFns: !!outputFns });
     } else {
-      throw new ERRORS.ParseError('"eval" function is not a function:\n\n' +
+      throw new ParseError('"eval" function is not a function:\n\n' +
         ((evalFn && evalFn.toString) ? evalFn.toString() : '<?>') + '\n');
     }
   }
 };
+
+
 
 /**
  * Processes all functions in a passed object, getting them into the Lexical
@@ -150,6 +155,8 @@ function process(obj) {
       }
     }
   }
+
+  return obj;
 }
 
 /**
@@ -161,8 +168,9 @@ function process(obj) {
  */
 function rewriteFunction(fnName, fnString) {
   // All the source could be on one line potentially, so let's always do it
-  var asyncVarList = ['asyncIter'];
+  var asyncVarList = ['$it'];
   var fnCollapsed = HELPERS.cleanNewLineAndComments(fnString);
+  HELPERS.validateNoAsyncNestedFunctions(fnName, fnCollapsed);
   fnCollapsed = HELPERS.rewritePlaceholders(fnName, fnCollapsed, asyncVarList);
   fnCollapsed = HELPERS.transformFnToGenerator(fnCollapsed, asyncVarList);
   return HELPERS.uncleanNewLines(fnCollapsed);
@@ -178,6 +186,31 @@ var HELPERS = {
   debugFunction: function(fn) {
     console.log('\n\n----------------------------\n\n' +
       fn.toString() + '\n\n----------------------------\n\n');
+  },
+
+  validateNoAsyncNestedFunctions: function(fnName, fnCollapsed) {
+    var parts = fnCollapsed.split(SPLIT_FUNCTION_REGEXP);
+
+    for (var i=2; i < parts.length; i++) {
+      var part = parts[i];
+      var bracketCount = 1;
+      var idx;
+
+      for (idx=0; (idx < part.length && bracketCount > 0); idx++) {
+        var char = part.charAt(idx);
+        bracketCount += (char === '{' ? +1 : ( char === '}' ? -1 : 0));
+      }
+
+      if (bracketCount > 0
+            || part.substring(0, idx).match(ASYNC_PLACEHOLDER_REGEXP)) {
+        throw new ParseError('Nested functions cannot contain asynchronous ' +
+          'placeholders', fnName);
+      }
+    }
+  },
+
+  validateNoDuplicatePlaceholders: function(fnName, fnCollapsed) {
+
   },
 
   cleanNewLineAndComments: function(fnString) {
@@ -209,7 +242,7 @@ var HELPERS = {
       // There must be a colon after the placeholder, otherwise the programmer
       // has messed up
       if (afterPlaceholderParts.length < 2) {
-        throw new ERRORS.ParseError('No semicolon after ' + match[0], fnName);
+        throw new ParseError('No semicolon after ' + match[0], fnName);
       }
 
       // Add the matched variable (without brackets) to a definition list

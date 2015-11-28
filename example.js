@@ -1,4 +1,4 @@
-var aysncNative = require('./src/async-native.js').configure(($a) => eval($a));
+var $async = require('./src/async-native.js').init(($a) => eval($a));
 
 // A test function that accepts a delay and a standard Node like callback: (error, result)
 var testSleep = function(delay, callback) {
@@ -7,17 +7,20 @@ var testSleep = function(delay, callback) {
   }, delay);
 };
 
-module.exports = {
+module.exports = $async({
   seriesExample: function(callback) {
+
+
+
     console.log('\n\nSeries example:\n');
 
-    testSleep(3000, {$myTest1}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
+    testSleep(500, {$myTest1}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
     console.log('exampleFn1', $myTest1);
 
-    testSleep(2000, {$myTest2}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
+    testSleep(500, {$myTest2}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
     console.log('exampleFn1', $myTest2);
 
-    testSleep(1000, {$myTest3}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
+    testSleep(100, {$myTest3}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
     console.log('exampleFn1', $myTest3);
 
     callback(null, null);
@@ -28,9 +31,9 @@ module.exports = {
 
     // These are called in parallel
     var parallelCalls = {
-      testA: testSleep(3000, {$myTest1}),
+      testA: testSleep(500, {$myTest1}),
       testB: testSleep(1, {$myTest2}),
-      testC: testSleep(1000, {$myTest3})
+      testC: testSleep(200, {$myTest3})
     }; /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
 
     // Will print out after 3000 ms only
@@ -57,15 +60,13 @@ module.exports = {
       module.exports.parallelExample({$two});
       module.exports.asyncErrorExample({$three});
     } catch(e) {
-      if (e instanceof aysncNative.FutureError) {
+      if (e instanceof FutureError) {
         console.log('Error via callback was:', e.message);
       } else {
         console.log('Immediate error was:', e.message);
       }
     }
   }
-};
-
-aysncNative.process(module.exports);
+});
 
 module.exports._callExamplesAsynchronously();

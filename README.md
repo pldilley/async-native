@@ -12,6 +12,9 @@ were in its own thread, by leveraging yield and code re-writing.
 
 ## Usage
 
+Same variable is not able to be used twice in the same context
+
+
 ```js
   var scapegoat = require('scapegoat')
       escape = scapegoat.escape,
