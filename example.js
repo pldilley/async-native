@@ -1,3 +1,5 @@
+// Run this file with 'node example.js'
+
 var $async = require('./src/async-native.js').init(($a) => eval($a));
 
 // A test function that accepts a delay and a standard Node like callback: (error, result)
@@ -9,9 +11,6 @@ var testSleep = function(delay, callback) {
 
 module.exports = $async({
   seriesExample: function(callback) {
-
-
-
     console.log('\n\nSeries example:\n');
 
     testSleep(500, {$myTest1}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
@@ -44,6 +43,17 @@ module.exports = $async({
     callback(null, null);
   },
 
+  threadExample: function(callback) {
+    console.log('\n\nParallel example:\n');
+
+    $: {
+      test;
+      console.log('myTest');
+    };
+
+    callback(null, null);
+  },
+
   asyncErrorExample: function(callback) {
     console.log('\n\nError example:\n');
 
@@ -61,7 +71,7 @@ module.exports = $async({
       module.exports.asyncErrorExample({$three});
     } catch(e) {
       if (e instanceof FutureError) {
-        console.log('Error via callback was:', e.message);
+        console.log('Error via async was:', e.message);
       } else {
         console.log('Immediate error was:', e.message);
       }
