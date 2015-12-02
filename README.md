@@ -1,7 +1,7 @@
 async-native
 =========
 
-_This module is ALPHA and still being developed!_
+_This module is ALPHA and still being developed! It will be up on npm shortly._
 
 async-native allows the user to write asynchronous code synchronously, as if it
 were in its own thread, by leveraging yield and code re-writing.
