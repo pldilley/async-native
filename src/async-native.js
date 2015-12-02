@@ -197,7 +197,6 @@ function rewriteFunction(fnName, fnString) {
   // All the source could be on one line potentially, so let's always do it
   var asyncVarList = ['__it'];
   var fnCollapsed = HELPERS.cleanNewLineAndComments(fnString);
-  console.log("REWRITE THREADS");
   fnCollapsed = HELPERS.rewriteThreads(fnName, fnCollapsed, asyncVarList);
   HELPERS.validateNoAsyncNestedFunctions(fnName, fnCollapsed);
   fnCollapsed = HELPERS.rewritePlaceholders(fnName, fnCollapsed, asyncVarList);
@@ -248,7 +247,7 @@ var HELPERS = {
     return fnString.replace(NEWLINE_REGEXP, '\n');
   },
 
-  rewriteThreads: function(fnName, fnStr) {
+  rewriteThreads: function(fnName, fnStr, asyncVarList) {
     var match;
 
     while ((match = fnStr.match(THREAD_REGEXP))) {
@@ -264,7 +263,12 @@ var HELPERS = {
         throw new global.ParseError('No semicolon after ' + match[0], fnName);
       }
 
-      code = 'threadAsyncNative(function(' + varName + ') ' + code + ', ' + varName + ', {$__THREAD});\n' + varName + '=$__THREAD';
+      // Add the matched variable (without brackets) to a definition list
+      if (asyncVarList.indexOf('$' + varName) === -1) {
+        asyncVarList.push('$' + varName);
+      }
+
+      code = 'threadAsyncNative(function(' + varName + ') ' + code + ', ' + varName + ', {$__THREAD});\n$' + varName + '=$__THREAD';
       fnStr = fnStr.substring(0, threadIdx) + code + threadStr.substring(idxs.end);
     }
 
