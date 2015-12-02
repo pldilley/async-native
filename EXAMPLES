@@ -1,0 +1,292 @@
+/**
+ * @Class();
+ * @shouldBeImported();
+ * @parse(
+ *     {
+ *      "hehe": "test",
+ *      "foo": {
+ *          "value": "bar"
+ *      }
+ *     }
+ * );
+ */
+
+
+/* @Class(); */
+
+
+
+$ ---> Returns 
+
+var Filesystem = null,
+Underscore = null,
+HttpServer = null,
+MyService = null
+
+@Autowire("fs", "underscore", "httpserver")
+function(Filesystem, Underscore, HttpServer, $request, $response, MyService) {
+
+}
+
+
+this.main = function() {
+  var user = null,
+      posts = null;
+
+
+  fs.open('data.xml', 'r')
+
+fs.readFile(‘abc.txt’,function(err,data) {
+    if(!err) {
+       console.log(data);
+    }
+});
+
+// Simple example
+var abcTxtFuture = $(fs.readFile)('abc.txt');
+$(printAfterTimeout)(abcTxtFuture);
+
+
+// Different simple
+$(fs.readFile, 'abc.txt')
+	.$(function(result, [callback]) {
+	    if (result === 'admin') {
+		return false;
+		return loadAdmin;	// Defers to another method
+	    } else {
+		return loadUser;
+	    }
+	})
+	.$(function(user, callback) {
+	    if (user === 'admin') {
+
+	    }
+	});
+
+// Multi example
+var abcTxtFuture = $(fs.readFile)('abc.txt');
+var defTxtFuture = $(fs.readFile)('def.txt');
+
+var combinedTxtFuture = $(function(abc, def) {
+   return abc + ' ' + def;
+})(abcTxtFuture, defTxtFuture)
+
+$(printAfterTimeout)(combinedTxtFuture);
+
+// Multi example
+var abcTxt, defTxt;
+
+var abcTxtFuture = $(fs.readFile)('abc.txt');
+var defTxtFuture = $(fs.readFile)('def.txt');
+
+$(function(abc, def, callback) {
+   callback(null, abc || def);
+
+   return {
+      isLegacyNotes: !!def
+   };
+})(abcTxtFuture, defTxtFuture)
+	.isLegacyNotes(function(combined)
+
+
+
+
+
+// Ajax example
+
+var ajaxFuture = Future($.ajax)({ url: url, data: data });
+
+
+
+
+ajaxFuture
+
+
+$.ajax({
+  url: url,
+  data: data,
+  success: success,
+  dataType: dataType
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+$(fs.readFile)('abc.txt')
+  .$(fs.readFile)('def.txt')
+  .$(function() {
+
+   })
+
+  try {
+     $(MyService.loaduser)([userId)
+
+
+     this.$(MyService.loaduser(userId), MyService.loadUsersPosts(userId))
+     .$(function(userData, postData) {
+        user = userData;
+        posts = postData;
+        // Calling this.$ within will result in a "nested async call exception"
+     })
+
+// Won't work...
+     .$(user.isAdmin ? MyService.renderAdmin(user, posts) : MyService.renderUser(user, posts));
+
+   } catch(eFn) {
+      eFn(function(err) {
+         if (err instanceof CouldNotGetUserError) {
+             // ... etc
+         }
+      });
+   }
+}
+
+// In a service somewhere
+
+function printAfterTimeout(toPrint, callback) {
+   var delay = 2000;
+
+   setTimeout(function() {
+      console.log(toPrint);
+      callback(null, delay);
+   }, delay);
+}
+
+
+function loaduser(userId) {
+   return $(function() {
+
+   });
+
+   this.callback("hello!");
+
+
+   throw CouldNotGetUserError(err);
+}
+
+function loadUsersPosts(userId) {
+
+}
+
+
+FutureFn implements Future
+
+Future = function(takesFn) {
+   returns <chainable Future>;
+}
+
+
+
+
+var step4 = $();
+
+function step3(callback) {
+
+}
+
+
+
+
+
+// Final ideas
+// Each call in the chain gets passed a callback method as the last argument to any provided arguments
+
+// In series, the second call in the chain receives the result of the one before it as the first argument
+ $(nameOfFn, argument1)
+.$(nameOfFn)
+.$(nameOfFn)
+
+// In parallel, the second call in the chain receives the result of all of the calls before it
+ $(nameOfFn1, argument1, ...)(nameOfFn2, argument1, ...)
+.$(nameOfFn3)
+
+// Loop
+
+// Flow control
+var fork1 = $();
+
+$(nameOfFn, argument1, ...)
+  .$(function(result, callback) {
+      if (result === "true") {
+        fork1.$(process);
+        callback(null, result);
+      } else {
+        callback(null);
+        //throw new Error('My problem');  // Can throw errors immediately if synchronously
+      }
+   })
+  .$(fork1)
+
+
+// Stop
+If you simply do $() with no arguments, it has no method that will call a callback function and so the code will
+stop. If you then provide the next item in the chain: $().$(myMethod), you can call ".skip()" to force the first
+item to be skipped and the result of the item before that will be forwarded to the next item. However, if there is
+no next item, be aware that asyncfn will then throw an error. Basically you must ensure that there will be a next
+item by the time async calls "skip".
+
+// Synchronous
+Usually you call $ with the first parameter being the asynchronous function to be handled. However if you have a
+synchronous function that does not support callbacks, you can handle it by passing it as the scope for $.
+
+ $(nameOfFn, argument1)
+
+.$((result, callback) => return result === "true"
+                                  ? fork1.$(process)
+                                  : new Error("Test"))
+
+.$(fork1, argument1, $)
+
+.S(synchronousFn, argument1)
+
+.$(fn2)
+
+
+// The annotation goes through code source and converts to a yeild format
+/* @async() */
+function testFn() {
+   var starting = 1;
+   var myRest;
+   fs.readFile('abc.txt', <myRest>);
+
+}
+
+
+function testFn() {
+
+  function yielder*(next) {
+     var starting = 1;
+     var myRest;
+     yield fs.readFile(‘abc.txt’, function(e, r) { myResult = r; next(e); } (err, result) => { myRest = result; next(err); });
+  }
+
+  var iterator = yielder(function(err) {
+    if (!err) {
+      iterator.next();
+    } else {
+      throw err;
+    }
+  });
+}
+
+
+
+
+TypeError: Generator is already running
+    at throw (native)

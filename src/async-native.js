@@ -1,3 +1,6 @@
+/*jslint node: true, evil: true, regexp: true, indent: 2, maxlen: 80*/
+var Parallel = require('paralleljs');
+
 /**
  * async-native
  * https://github.com/brentertz/scapegoat // TODO UPDATE GI LINK HERE
@@ -10,24 +13,24 @@
 /**
  * Error for processing errors
  */
-ParseError = function ParseError(message, fnKey) {
-   Error.captureStackTrace(this);
-   var msg = 'async-native - Unable to parse! ' +
+global.ParseError = function ParseError(message, fnKey) {
+  Error.captureStackTrace(this);
+  var msg = 'async-native - Unable to parse! ' +
     (fnKey ? '("' + fnKey + '")' : '') + '\n';
-   this.message = msg + '            ' + message;
-   this.name = "ParseError";
+  this.message = msg + '            ' + message;
+  this.name = "ParseError";
 };
 
 /**
  * Error for callback errors
  */
-FutureError = function FutureError(message) {
-   Error.captureStackTrace(this);
-   var msg = 'async-native - A callback returned an error\n';
-   this.message = msg + message;
-   this.name = "FutureError";
+global.FutureError = function FutureError(message) {
+  Error.captureStackTrace(this);
+  var msg = 'async-native - A callback returned an error\n';
+  this.message = msg + message;
+  this.name = "FutureError";
 };
-ParseError.prototype = Object.create(Error.prototype);
+global.ParseError.prototype = Object.create(Error.prototype);
 
 
 /**
@@ -35,8 +38,8 @@ ParseError.prototype = Object.create(Error.prototype);
  */
 try {
   eval('(function *(){})');
-} catch(err) {
-  throw new ParseError('Missing Generators ES6 support',
+} catch (err) {
+  throw new global.ParseError('Missing Generators ES6 support',
     '--harmony_generators');
 }
 
@@ -58,20 +61,26 @@ var ALL_MULTILINE_COMMENTS = /\/\*(\n|.)*?\*\//g;
  * - Yields are replaced after the placeholder's next nearest ';'
  */
 var ASYNC_PLACEHOLDER_REGEXP = /\{(\$[\w\$]+?)\}/;
-var ASYNC_REPLACE = 'function(e, r) { $1 = r; nextAsyncNative(e, $it, "$1"); }';
+var ASYNC_ID_REGEXP = /\{\$N\}/;
 var ASYNC_YIELD = '\nyield 1';
+var ASYNC_REPLACE =
+    'function(e, r) { $1 = r; nextAsyncNative(e, __it, {$N}, "$1"); }';
 
 /**
  * Relates to wrapping the function up into a Generator and validation
  */
-var SPLIT_FUNCTION_REGEXP = /function.*?\{/g;
+var FUNCTION_FIND_REGEXP = /function.*?\{/g;
 var FUNCTION_REGEXP = /(function.*?\{)/;
 var FUNCTION_GENERATOR = '\nfunction* yielder() { ';
-var FUNCTION_ITERATOR = '\n$it = yielder.apply(this, arguments);' +
-                        '\n$it.complete = [];' +
-                        '\n$it.next();\n}\n';
+var FUNCTION_ITERATOR = '\n__it = yielder.apply(this, arguments);' +
+                        '\n__it.complete = [];' +
+                        '\n__it.next();\n}\n';
 
 
+var THREAD_REGEXP = /\$\:(.+?)[ \t]+=>[ \t]+\{/;
+//var THREAD_RENDERER = function(varName, ) {
+//
+//};
 
 /**
  * Global function to help restart Iterators after a callback completes
@@ -81,31 +90,47 @@ var FUNCTION_ITERATOR = '\n$it = yielder.apply(this, arguments);' +
  * @throws:iterator {FutureError}       If the callback is passed an error
  * @throws {Error}                      If the callback causes an unknown error
  */
-nextAsyncNative = function(e, $it, varName) {
-  if ($it.complete.indexOf(varName) === -1) {
+global.nextAsyncNative = function(e, __it, id, varName) {
+  if (__it.complete.indexOf(id) === -1) {
     try {
       if (!e) {
-        $it.next();
+        __it.next();
       } else {
         var eIsErr = e instanceof Error;
-        var error = new FutureError(eIsErr ? e.message : e);
+        var error = new global.FutureError(eIsErr ? e.message : e);
         error.prototype = eIsErr ? e.prototype : Object.create(Error.prototype);
-        $it.throw(error);
+        __it.throw(error);
       }
-      $it.complete.push(varName);
+      __it.complete.push(id);
     } catch(f) {
       // A TypeError happens if the callback is immediately called in the same
       // call stack that the asynchronous function was called. The yield has to
       // be hit first before the generator can continue. Shift to another stack
       if (f instanceof TypeError) {
-        setTimeout(global.nextAsyncNative.bind(this, e, $it, varName), 0);
+        setTimeout(global.nextAsyncNative.bind(this, e, __it, id, varName), 0);
       } else {
         throw f;
       }
     }
   } else {
-    throw new ParseError('The same callback was called twice', varName);
+    // TODO MAKE CONDITIONAL - ALLOW IGNORE OPTION
+    throw new global.FutureError('The same callback was called twice', varName);
   }
+};
+
+/**
+ * Global function to help start threads
+ *
+ * @param  {Function} fn                The function to start in a thread
+ * @param  {JSON} data                  Json like data (objects, arrays, etc)
+ * @param  {Function} callback          Callback once complete with the result
+ * @throws:iterator {FutureError}       If the callback is passed an error
+ */
+global.threadAsyncNative = function(fn, data, callback) {
+    new Parallel(data).spawn(fn).then(function(result) {
+      //TODO WHERE DO I GET ERRORS?
+      callback(null, result);
+    });
 };
 
 
@@ -124,7 +149,7 @@ module.exports = {
     if (HELPERS.isFunction(evalFn)) {
       return process.bind({ evalFn: evalFn, outputFns: !!outputFns });
     } else {
-      throw new ParseError('"eval" function is not a function:\n\n' +
+      throw new global.ParseError('"eval" function is not a function:\n\n' +
         ((evalFn && evalFn.toString) ? evalFn.toString() : '<?>') + '\n');
     }
   }
@@ -145,7 +170,9 @@ function process(obj) {
       var fnString = obj[itemName].toString();
 
       // We only need to re-write the function if it contains instances
-      if (fnString.match(ASYNC_PLACEHOLDER_REGEXP)) {
+      if (fnString.match(ASYNC_PLACEHOLDER_REGEXP)
+          || fnString.match(THREAD_REGEXP)) {
+
         var newCode = rewriteFunction(itemName, fnString);
         obj[itemName] = this.evalFn('(' + newCode + ')');
 
@@ -168,13 +195,15 @@ function process(obj) {
  */
 function rewriteFunction(fnName, fnString) {
   // All the source could be on one line potentially, so let's always do it
-  var asyncVarList = ['$it'];
+  var asyncVarList = ['__it'];
   var fnCollapsed = HELPERS.cleanNewLineAndComments(fnString);
+  console.log("REWRITE THREADS");
+  fnCollapsed = HELPERS.rewriteThreads(fnName, fnCollapsed, asyncVarList);
   HELPERS.validateNoAsyncNestedFunctions(fnName, fnCollapsed);
   fnCollapsed = HELPERS.rewritePlaceholders(fnName, fnCollapsed, asyncVarList);
   fnCollapsed = HELPERS.transformFnToGenerator(fnCollapsed, asyncVarList);
   return HELPERS.uncleanNewLines(fnCollapsed);
-};
+}
 
 
 
@@ -189,28 +218,24 @@ var HELPERS = {
   },
 
   validateNoAsyncNestedFunctions: function(fnName, fnCollapsed) {
-    var parts = fnCollapsed.split(SPLIT_FUNCTION_REGEXP);
+    var fnContents = fnCollapsed.substring(1);
+    var nestedFns = fnContents.match(FUNCTION_FIND_REGEXP);
 
-    for (var i=2; i < parts.length; i++) {
-      var part = parts[i];
-      var bracketCount = 1;
-      var idx;
+    if (nestedFns) {
+      var idx = fnContents.indexOf(nestedFns[0]);
+      //console.log(fnContents.substring(idx));
+      for (var i=1; i <= nestedFns.length; i++) {
+        var code = HELPERS._findBlock(fnContents.substring(idx), true);
 
-      for (idx=0; (idx < part.length && bracketCount > 0); idx++) {
-        var char = part.charAt(idx);
-        bracketCount += (char === '{' ? +1 : ( char === '}' ? -1 : 0));
-      }
+        if (code.match(ASYNC_PLACEHOLDER_REGEXP)) {
+          throw new global.ParseError('Nested functions cannot contain ' +
+            'asynchronous placeholders or threads', fnName);
+        }
 
-      if (bracketCount > 0
-            || part.substring(0, idx).match(ASYNC_PLACEHOLDER_REGEXP)) {
-        throw new ParseError('Nested functions cannot contain asynchronous ' +
-          'placeholders', fnName);
+        fnContents = fnContents.substring(idx + 1);
+        idx = fnContents.indexOf(nestedFns[i]);
       }
     }
-  },
-
-  validateNoDuplicatePlaceholders: function(fnName, fnCollapsed) {
-
   },
 
   cleanNewLineAndComments: function(fnString) {
@@ -221,6 +246,29 @@ var HELPERS = {
 
   uncleanNewLines: function(fnString) {
     return fnString.replace(NEWLINE_REGEXP, '\n');
+  },
+
+  rewriteThreads: function(fnName, fnStr) {
+    var match;
+
+    while ((match = fnStr.match(THREAD_REGEXP))) {
+      var varName = match[1];
+      var threadIdx = fnStr.indexOf(match[0]);
+      var threadStr = fnStr.substring(threadIdx);
+      var idxs = HELPERS._findBlock(threadStr);
+      var code = threadStr.substring(idxs.start, idxs.end);
+
+      // There must be a colon after the thread, otherwise the programmer
+      // has messed up
+      if (threadStr.charAt(idxs.end + 1) === ';') {
+        throw new global.ParseError('No semicolon after ' + match[0], fnName);
+      }
+
+      code = 'threadAsyncNative(function(' + varName + ') ' + code + ', ' + varName + ', {$__THREAD});\n' + varName + '=$__THREAD';
+      fnStr = fnStr.substring(0, threadIdx) + code + threadStr.substring(idxs.end);
+    }
+
+    return fnStr;
   },
 
   /**
@@ -234,15 +282,17 @@ var HELPERS = {
    */
   rewritePlaceholders: function(fnName, fnStr, asyncVarList) {
     var match;
+    var i = 0;
 
-    while (match = fnStr.match(ASYNC_PLACEHOLDER_REGEXP)) {
+    while ((match = fnStr.match(ASYNC_PLACEHOLDER_REGEXP))) {
+      i++;
       var matchIndex = fnStr.indexOf(match[0]);
       var afterPlaceholderParts = fnStr.substring(matchIndex).split(';');
 
       // There must be a colon after the placeholder, otherwise the programmer
       // has messed up
       if (afterPlaceholderParts.length < 2) {
-        throw new ParseError('No semicolon after ' + match[0], fnName);
+        throw new global.ParseError('No semicolon after ' + match[0], fnName);
       }
 
       // Add the matched variable (without brackets) to a definition list
@@ -255,7 +305,8 @@ var HELPERS = {
       fnStr = fnStr.substring(0, matchIndex) + afterPlaceholderParts.join(';');
 
       // Replace the placeholder with a callback
-      fnStr = fnStr.replace(ASYNC_PLACEHOLDER_REGEXP, ASYNC_REPLACE);
+      fnStr = fnStr.replace(ASYNC_PLACEHOLDER_REGEXP,
+                            ASYNC_REPLACE.replace(ASYNC_ID_REGEXP, i));
     }
 
     return fnStr;
@@ -273,5 +324,27 @@ var HELPERS = {
       '\nvar ' + asyncVarList.join(', ') + ';' + FUNCTION_GENERATOR);
 
     return wrappedFn + FUNCTION_ITERATOR;
+  },
+
+  _findBlock: function(input, outputBlockStr) {
+    var block = { start: -1, end: -1 };
+    var i = input.indexOf('{');
+    var x = 0;
+
+    if (i > -1) {
+      for ( ; i < input.length; i++) {
+        x += input[i] === '{' ? +1 : (input[i] === '}' ? -1 : 0);
+        if (x > 0 && block.start === -1) {
+          block.start = i;
+        } else if (x === 0 && block.start > -1 && block.end === -1) {
+          block.end = i + 1;
+          break;
+        }
+      }
+    }
+    return !outputBlockStr ? block
+      : (block.start > -1 ? input.substring(block.start, block.end) : '');
   }
 };
+
+
