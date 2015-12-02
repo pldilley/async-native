@@ -147,6 +147,8 @@ module.exports = {
    */
   init: function(evalFn, outputFns) {
     if (HELPERS.isFunction(evalFn)) {
+       // TODO Test the eval function first
+       // TODO Allow custom namespace
       return process.bind({ evalFn: evalFn, outputFns: !!outputFns });
     } else {
       throw new global.ParseError('"eval" function is not a function:\n\n' +
@@ -171,7 +173,7 @@ function process(obj) {
 
       // We only need to re-write the function if it contains instances
       if (fnString.match(ASYNC_PLACEHOLDER_REGEXP)
-          || fnString.match(THREAD_REGEXP)) {
+          || fnString.match(THREAD_REGEXP)) {  // TODO unwrap
 
         var newCode = rewriteFunction(itemName, fnString);
         obj[itemName] = this.evalFn('(' + newCode + ')');
@@ -264,10 +266,11 @@ var HELPERS = {
       }
 
       // Add the matched variable (without brackets) to a definition list
-      if (asyncVarList.indexOf('$' + varName) === -1) {
+      if (asyncVarList.indexOf('$' + varName) === -1) { // TODO Move to helper
         asyncVarList.push('$' + varName);
       }
 
+      // TODO Move to renderer
       code = 'threadAsyncNative(function(' + varName + ') ' + code + ', ' + varName + ', {$__THREAD});\n$' + varName + '=$__THREAD';
       fnStr = fnStr.substring(0, threadIdx) + code + threadStr.substring(idxs.end);
     }
@@ -300,7 +303,7 @@ var HELPERS = {
       }
 
       // Add the matched variable (without brackets) to a definition list
-      if (asyncVarList.indexOf(match[1]) === -1) {
+      if (asyncVarList.indexOf(match[1]) === -1) {  // TODO Move to helper
         asyncVarList.push(match[1]);
       }
 

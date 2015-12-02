@@ -1,6 +1,6 @@
 {
-  "name": "annosync",
-  "version": "1.0.0",
+  "name": "async-native",
+  "version": "0.1.0",
   "description": "A non-intrusive minimalistic helper for working with asynchronous Javascript",
   "main": "index.js",
   "scripts": {
@@ -31,7 +31,7 @@
     "url": "https://github.com/brentertz/scapegoat/issues"
   },
   "dependencies": {
-    "paralleljs": ">= 0.2.1"
+    "paralleljs": "^0.2.1"
   },
   "devDependencies": {
     "mocha": "~1.16.2",

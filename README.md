@@ -1,44 +1,23 @@
-async-native [![Build Status](https://travis-ci.org/theporchrat/node-simple-chainable.png?branch=master)](https://travis-ci.org/theporchrat/node-simple-chainable)
+async-native
 =========
+
+_This module is ALPHA and still being developed!_
 
 async-native allows the user to write asynchronous code synchronously, as if it
 were in its own thread, by leveraging yield and code re-writing.
 
-## Installation
-
-```shell
-  npm install scapegoat --save
-```
-
 ## Usage
 
-Same variable is not able to be used twice in the same context
-
-
-```js
-  var scapegoat = require('scapegoat')
-      escape = scapegoat.escape,
-      unescape = scapegoat.unescape;
-
-  var html = '<h1>Hello World</h1>',
-      escaped = escape(html),
-      unescaped = unescape(escaped);
-
-  console.log('html', html, 'escaped', escaped, 'unescaped', unescaped);
-```
+Please see example.js
 
 ## Tests
 
-```shell
-   npm test
-```
+TODO
 
 ## Contributing
 
-* 
-
-In lieu of a formal styleguide, take care to maintain the existing coding style.
-Add unit tests for any new or changed functionality. Lint and test your code.
+* Adhere to the node style guidelines exactly
+* Lint and test your code.
 
 ## Release History
 
