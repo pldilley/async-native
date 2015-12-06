@@ -78,9 +78,10 @@ var FUNCTION_ITERATOR = '\n__it = yielder.apply(this, arguments);' +
 
 
 var THREAD_REGEXP = /\$\:(.+?)[ \t]+=>[ \t]+\{/;
-//var THREAD_RENDERER = function(varName, ) {
-//
-//};
+var THREAD_RENDERER = function(varName, code) {
+      return 'threadAsyncNative(function(' + varName + ') ' + code + ', ' +
+        varName + ', {$__THREAD});\n$' + varName + '=$__THREAD';
+};
 
 /**
  * Global function to help restart Iterators after a callback completes
@@ -146,7 +147,7 @@ module.exports = {
    * @throws {ParseError}         If the passed function is not a function
    */
   init: function(evalFn, outputFns) {
-    if (HELPERS.isFunction(evalFn)) {
+    if (_isFunction(evalFn)) {
        // TODO Test the eval function first
        // TODO Allow custom namespace
       return process.bind({ evalFn: evalFn, outputFns: !!outputFns });
@@ -168,7 +169,7 @@ module.exports = {
  */
 function process(obj) {
   for (var itemName in obj) {
-    if (HELPERS.isFunction(obj[itemName])) {
+    if (_isFunction(obj[itemName])) {
       var fnString = obj[itemName].toString();
 
       // We only need to re-write the function if it contains instances
@@ -179,7 +180,7 @@ function process(obj) {
         obj[itemName] = this.evalFn('(' + newCode + ')');
 
         if (this.outputFns) {
-          HELPERS.debugFunction(obj[itemName]);
+          HELPERS._debugFunction(obj[itemName]);
         }
       }
     }
@@ -209,15 +210,6 @@ function rewriteFunction(fnName, fnString) {
 
 
 var HELPERS = {
-  isFunction: function(fn) {
-    return typeof fn === 'function';
-  },
-
-  debugFunction: function(fn) {
-    console.log('\n\n----------------------------\n\n' +
-      fn.toString() + '\n\n----------------------------\n\n');
-  },
-
   validateNoAsyncNestedFunctions: function(fnName, fnCollapsed) {
     var fnContents = fnCollapsed.substring(1);
     var nestedFns = fnContents.match(FUNCTION_FIND_REGEXP);
@@ -254,14 +246,14 @@ var HELPERS = {
 
     while ((match = fnStr.match(THREAD_REGEXP))) {
       var varName = match[1];
-      var threadIdx = fnStr.indexOf(match[0]);
-      var threadStr = fnStr.substring(threadIdx);
-      var idxs = HELPERS._findBlock(threadStr);
-      var code = threadStr.substring(idxs.start, idxs.end);
+      var thrdIdx = fnStr.indexOf(match[0]);
+      var thrdStr = fnStr.substring(thrdIdx);
+      var idxs = HELPERS._findBlock(thrdStr);
+      var code = thrdStr.substring(idxs.start, idxs.end);
 
       // There must be a colon after the thread, otherwise the programmer
       // has messed up
-      if (threadStr.charAt(idxs.end + 1) === ';') {
+      if (thrdStr.charAt(idxs.end + 1) === ';') {
         throw new global.ParseError('No semicolon after ' + match[0], fnName);
       }
 
@@ -271,8 +263,8 @@ var HELPERS = {
       }
 
       // TODO Move to renderer
-      code = 'threadAsyncNative(function(' + varName + ') ' + code + ', ' + varName + ', {$__THREAD});\n$' + varName + '=$__THREAD';
-      fnStr = fnStr.substring(0, threadIdx) + code + threadStr.substring(idxs.end);
+      code = THREAD_RENDERER(varName, code);
+      fnStr = fnStr.substring(0, thrdIdx) + code + thrdStr.substring(idxs.end);
     }
 
     return fnStr;
@@ -331,6 +323,16 @@ var HELPERS = {
       '\nvar ' + asyncVarList.join(', ') + ';' + FUNCTION_GENERATOR);
 
     return wrappedFn + FUNCTION_ITERATOR;
+  }
+};
+
+  _isFunction: function(fn) {
+    return typeof fn === 'function';
+  },
+
+  _debugFunction: function(fn) {
+    console.log('\n\n----------------------------\n\n' +
+      fn.toString() + '\n\n----------------------------\n\n');
   },
 
   _findBlock: function(input, outputBlockStr) {
@@ -352,6 +354,3 @@ var HELPERS = {
     return !outputBlockStr ? block
       : (block.start > -1 ? input.substring(block.start, block.end) : '');
   }
-};
-
-
