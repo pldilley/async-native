@@ -39,7 +39,8 @@ global.FutureError = function FutureError(message) {
  * Error for callback errors
  */
 global.ThreadError = function ThreadError(fileName, varName, message, stack) {
-  var msg = 'async-native - Error in "' + fileName + ' (function) --> $:' + varName + ' (thread)"\n';
+  var msg = 'async-native - Error in "' + fileName + ' (function) --> $:' +
+            varName + ' (thread)"\n';
   this.message = msg + message;
   this.originalMessage = '';
   this.name = "ThreadError";
@@ -80,10 +81,12 @@ var ALL_MULTILINE_COMMENTS = /\/\*(\n|.)*?\*\//g;
  */
 var ASYNC_PLACEHOLDER_REGEXP = /\{(\$[\w\$]+?)\}/;
 var ASYNC_YIELD = '\nyield 1';
-var ASYNC_REPLACE_RENDERER = function ASYNC_REPLACE_RENDERER(fnName, id, ignoreMultipleCallback) {
+var ASYNC_REPLACE_RENDERER =
+    function ASYNC_REPLACE_RENDERER(fnName, id, ignoreMultipleCallback) {
   return 'function callback_' + fnName + '_' + id + '(e, r) { ' +
       '$1 = r; ' +
-      'callbackAsyncNative(e, __it, ' + id + ', "$1", ' + !!ignoreMultipleCallback + ');' +
+      'callbackAsyncNative(e, __it, ' + id + ', "$1", ' +
+      !!ignoreMultipleCallback + ');' +
   '}';
 };
 
@@ -146,7 +149,8 @@ global.callbackAsyncNative = function callbackAsyncNative(e, __it, id, varName) 
       // call stack that the asynchronous function was called. The yield has to
       // be hit first before the generator can continue. Shift to another stack
       if (asyncNativeError instanceof TypeError) {
-        setTimeout(global.callbackAsyncNative.bind(this, e, __it, id, varName), 0);
+        setTimeout(global.callbackAsyncNative.bind(this, e, __it, id, varName),
+                   0);
       } else {
         throw asyncNativeError;
       }
@@ -165,17 +169,19 @@ global.callbackAsyncNative = function callbackAsyncNative(e, __it, id, varName) 
  * @param  {Function} callback          Callback once complete with the result
  * @throws {ThreadError | Error}        If the callback is passed an error (or one bubbles up)
  */
-global.threadAsyncNative = function threadAsyncNative(fileName, varName, fn, data, callback) {
-  new Parallel(data).spawn(fn).then(function(result) {
-    if (result.__asyncError) {
-      var err = new global.ThreadError(fileName, varName, result.__asyncError, result.stack);
-      callback(err, null);
-    } else {
-      callback(null, result);
-    }
-  }, function(unknownThreadError) {
-    throw unknownThreadError;  // Should never happen but just in case to terminate everything
-  });
+global.threadAsyncNative =
+  function threadAsyncNative(fileName, varName, fn, data, callback) {
+    new Parallel(data).spawn(fn).then(function(result) {
+      if (result.__asyncError) {
+        var err = new global.ThreadError(fileName, varName,
+                                         result.__asyncError, result.stack);
+        callback(err, null);
+      } else {
+        callback(null, result);
+      }
+    }, function(unknownThreadError) {
+      throw unknownThreadError;  // Should never happen but just in case to terminate everything
+    });
 };
 
 
@@ -232,8 +238,8 @@ function process(obj) {
       var fnString = obj[itemName].toString();
 
       // We only need to re-write the function if it contains instances
-      if (fnString.match(ASYNC_PLACEHOLDER_REGEXP)
-          || fnString.match(THREAD_REGEXP)) {  // TODO unwrap
+      if (fnString.match(ASYNC_PLACEHOLDER_REGEXP) ||
+          fnString.match(THREAD_REGEXP)) {
 
         var newCode = rewriteFunction(itemName, fnString,
             this.options && this.options.ignoreMultipleCallback);
@@ -283,8 +289,10 @@ function rewriteFunction(fnName, fnString, ignoreMultipleCallback) {
 
   fnCollapsed = HELPERS.rewriteThreads(fnName, fnCollapsed, asyncVarList);
   HELPERS.validateNoAsyncNestedFunctions(fnName, fnCollapsed);
-  fnCollapsed = HELPERS.rewritePlaceholders(fnName, fnCollapsed, asyncVarList, ignoreMultipleCallback);
-  fnCollapsed = HELPERS.transformFnToGenerator(fnName, fnCollapsed, asyncVarList);
+  fnCollapsed = HELPERS.rewritePlaceholders(fnName, fnCollapsed, asyncVarList,
+                                            ignoreMultipleCallback);
+  fnCollapsed = HELPERS.transformFnToGenerator(fnName, fnCollapsed,
+                                               asyncVarList);
 
   return HELPERS.uncleanNewLines(fnCollapsed);
 }
@@ -298,25 +306,26 @@ var HELPERS = {
    * @param  {String} fnName                  The name (or key) of the function
    * @param  {String} fnCollapsed             The string source of the function
    */
-  validateNoAsyncNestedFunctions: function validateNoAsyncNestedFunctions(fnName, fnCollapsed) {
-    var fnContents = fnCollapsed.substring(1);
-    var nestedFns = fnContents.match(FUNCTION_FIND_REGEXP);
+  validateNoAsyncNestedFunctions:
+    function validateNoAsyncNestedFunctions(fnName, fnCollapsed) {
+      var fnContents = fnCollapsed.substring(1);
+      var nestedFns = fnContents.match(FUNCTION_FIND_REGEXP);
 
-    if (nestedFns) {
-      var idx = fnContents.indexOf(nestedFns[0]);
+      if (nestedFns) {
+        var idx = fnContents.indexOf(nestedFns[0]);
 
-      for (var i=1; i <= nestedFns.length; i++) {
-        var code = HELPERS._findBlock(fnContents.substring(idx), true);
+        for (var i=1; i <= nestedFns.length; i++) {
+          var code = HELPERS._findBlock(fnContents.substring(idx), true);
 
-        if (code.match(ASYNC_PLACEHOLDER_REGEXP)) {
-          throw new global.ParseError('Nested functions cannot contain ' +
-            'asynchronous placeholders or threads', fnName);
+          if (code.match(ASYNC_PLACEHOLDER_REGEXP)) {
+            throw new global.ParseError('Nested functions cannot contain ' +
+              'asynchronous placeholders or threads', fnName);
+          }
+
+          fnContents = fnContents.substring(idx + 1);
+          idx = fnContents.indexOf(nestedFns[i]);
         }
-
-        fnContents = fnContents.substring(idx + 1);
-        idx = fnContents.indexOf(nestedFns[i]);
       }
-    }
   },
 
   /**
@@ -355,14 +364,14 @@ var HELPERS = {
 
     while ((match = fnStr.match(THREAD_REGEXP))) {
       var varName = match[1];
-      var thrdIdx = fnStr.indexOf(match[0]);
-      var thrdStr = fnStr.substring(thrdIdx);
-      var idxs = HELPERS._findBlock(thrdStr);
-      var code = thrdStr.substring(idxs.start, idxs.end);
+      var threadIdx = fnStr.indexOf(match[0]);
+      var threadStr = fnStr.substring(threadIdx);
+      var idxs = HELPERS._findBlock(threadStr);
+      var code = threadStr.substring(idxs.start, idxs.end);
 
       // There must be a colon after the thread, otherwise the programmer
       // has messed up
-      if (thrdStr.charAt(idxs.end + 1) === ';') {
+      if (threadStr.charAt(idxs.end + 1) === ';') {
         throw new global.ParseError('No semicolon after ' + match[0], fnName);
       }
 
@@ -371,7 +380,9 @@ var HELPERS = {
 
       // TODO Move to renderer
       code = THREAD_RENDERER(fnName, varName, code);
-      fnStr = fnStr.substring(0, threadIdx) + code + threadStr.substring(idxs.end);
+
+      fnStr = fnStr.substring(0, threadIdx) + code +
+              threadStr.substring(idxs.end);
     }
 
     return fnStr;
@@ -409,7 +420,10 @@ var HELPERS = {
       fnStr = fnStr.substring(0, matchIndex) + afterPlaceholderParts.join(';');
 
       // Replace the placeholder with a callback
-      fnStr = fnStr.replace(ASYNC_PLACEHOLDER_REGEXP, ASYNC_REPLACE_RENDERER(fnName, i, ignoreMultipleCallback));
+      fnStr = fnStr.replace(
+        ASYNC_PLACEHOLDER_REGEXP,
+        ASYNC_REPLACE_RENDERER(fnName, i, ignoreMultipleCallback)
+      );
     }
 
     return fnStr;
@@ -422,12 +436,13 @@ var HELPERS = {
    * @return {Array<String>} asyncVarList     Array for variable definitions
    * @returns {String}                        The processing string result
    */
-  transformFnToGenerator: function transformFnToGenerator(fnName, fnCollapsed, asyncVarList) {
-    var wrappedFn = fnCollapsed.replace(FUNCTION_REGEXP, '$1' +
-      '\nvar ' + asyncVarList.join(', ') + ';' + FUNCTION_GENERATOR(fnName));
+  transformFnToGenerator:
+    function transformFnToGenerator(fnName, fnCollapsed, asyncVarList) {
+      var wrappedFn = fnCollapsed.replace(FUNCTION_REGEXP, '$1' +
+        '\nvar ' + asyncVarList.join(', ') + ';' + FUNCTION_GENERATOR(fnName));
 
-    return wrappedFn + FUNCTION_ITERATOR(fnName);
-  },
+      return wrappedFn + FUNCTION_ITERATOR(fnName);
+    },
 
 
 
@@ -472,3 +487,4 @@ var HELPERS = {
       array.push(item);
     }
   }
+};

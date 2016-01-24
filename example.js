@@ -30,7 +30,9 @@ var blinking = function(setState) {
 
   setTimeout(function() {
     console.log('.');
-    if (doBlink) blinking();
+    if (doBlink) {
+      blinking();
+    }
   }, 1000);
 };
 
@@ -150,7 +152,7 @@ module.exports = $async({
 //module.exports.parallelExample();
 //module.exports.nonErrorCallbackExample();
 //module.exports.noThreadExample();
-module.exports.threadExample();
+//module.exports.threadExample();
 //module.exports.asyncErrorExample();
 
 
