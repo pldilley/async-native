@@ -14,6 +14,19 @@ Please see example.js
 
 TODO
 
+## Todo
+
+* Test eval function or throw an error              [DONE]
+* Allow ignore of error                             [DONE]
+* Thread error catching                             [DONE]
+* Non-generator fallback support                    [IMPOSSIBLE (block code would ruin things - very likely)]
+* Move thread renderer to it's own renderer         [DONE]
+* Allow double call callbacks to be ignored         [DONE]
+* No error callback solution                        [DONE]
+* Event based solution                              [SINCE EVENT ACCEPTS CALLBACK, ALLOW USER TO USE A {$callback}]
+* Add function name signature to methods            [DONE]
+* Generate function names for generated methods     [DONE]
+
 ## Contributing
 
 * Adhere to the node style guidelines exactly
