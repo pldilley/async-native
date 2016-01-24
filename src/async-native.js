@@ -82,13 +82,13 @@ var ALL_MULTILINE_COMMENTS = /\/\*(\n|.)*?\*\//g;
 var ASYNC_PLACEHOLDER_REGEXP = /\{(\$[\w\$]+?)\}/;
 var ASYNC_YIELD = '\nyield 1';
 var ASYNC_REPLACE_RENDERER =
-    function ASYNC_REPLACE_RENDERER(fnName, id, ignoreMultipleCallback) {
-  return 'function callback_' + fnName + '_' + id + '(e, r) { ' +
-      '$1 = r; ' +
-      'callbackAsyncNative(e, __it, ' + id + ', "$1", ' +
-      !!ignoreMultipleCallback + ');' +
-  '}';
-};
+  function ASYNC_REPLACE_RENDERER(fnName, id, ignoreMultipleCallback) {
+    return 'function callback_' + fnName + '_' + id + '(e, r) { ' +
+           '$1 = r; ' +
+           'callbackAsyncNative(e, __it, ' + id + ', "$1", ' +
+           !!ignoreMultipleCallback + ');' +
+           '}';
+  };
 
 
 /**
@@ -182,7 +182,7 @@ global.threadAsyncNative =
     }, function(unknownThreadError) {
       throw unknownThreadError;  // Should never happen but just in case to terminate everything
     });
-};
+  };
 
 
 
@@ -289,6 +289,7 @@ function rewriteFunction(fnName, fnString, ignoreMultipleCallback) {
 
   fnCollapsed = HELPERS.rewriteThreads(fnName, fnCollapsed, asyncVarList);
   HELPERS.validateNoAsyncNestedFunctions(fnName, fnCollapsed);
+
   fnCollapsed = HELPERS.rewritePlaceholders(fnName, fnCollapsed, asyncVarList,
                                             ignoreMultipleCallback);
   fnCollapsed = HELPERS.transformFnToGenerator(fnName, fnCollapsed,
@@ -306,6 +307,7 @@ var HELPERS = {
    * @param  {String} fnName                  The name (or key) of the function
    * @param  {String} fnCollapsed             The string source of the function
    */
+
   validateNoAsyncNestedFunctions:
     function validateNoAsyncNestedFunctions(fnName, fnCollapsed) {
       var fnContents = fnCollapsed.substring(1);

@@ -69,7 +69,6 @@ module.exports = $async({
 
   nonErrorCallbackExample: function() {
     console.log('\n\No Error Callback example:\n');
-
     testSleep(1000, $async.noError({$myTestNoError}), true); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
     console.log('exampleFn1', $myTestNoError);
   },
