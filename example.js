@@ -3,8 +3,7 @@
 // Import the async-native module like this
 var $async = require('./src/async-native.js').init($ => eval($), {
       outputConvertedFns: true,       // console.log's the converted function source
-      ignoreMultipleCallback: false,    // allow methods to call the callback parameter twice - the second time is ignored
-      postProcessor: null              // a method to perform further processing on string functions before evalling
+      outputTimesOfFns: true         // console.log's the time it took to process the functions
     });
 
 // A test function that accepts a delay and a standard Node like callback
@@ -103,7 +102,11 @@ module.exports = $async({
           return n > 1 ? fibo(n - 1) + fibo(n - 2) : 1;
         }
 
-        return fibo(fib);
+        fibo(fib);
+
+        throw "BOGUS ERROR";
+
+        return false; //fibo(fib);
       };  /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
 
     } catch (e) {
@@ -132,6 +135,7 @@ module.exports = $async({
 
       //callback(new Error("This is an immediate test error")); // Handled too
     }
+
     try {
       willMakeAnError({$doMeAnError});
     } catch (e) {
@@ -143,16 +147,46 @@ module.exports = $async({
       console.log('\n', e);
       console.log(e.stack);
     }
+  },
+
+  ignoreMultipleCallbackExample: function() {
+    console.log('\n\nIgnore Multiple Callback example:\n');
+
+    function willCallbackTwice(callback) {
+      callback(null, true);
+      callback(null, true);
+    }
+
+    // Call a method which will callback twice (usually results in error)
+    willCallbackTwice($async.ignoreMultipleCallback({$callback}));
+
+    console.log("value is " + $callback);
+  },
+
+  timeoutExample: function() {
+    console.log('\n\nTimeout example:\n');
+
+    // Make a really long sleep, too long, and we'll have it timeout with an error
+    testSleep(2000, $async.timeout({$timeout}, 1000));
   }
 });
 
-// RUN THE LIST OF EXAMPLES
-//module.exports.seriesExample();
-//module.exports.parallelExample();
-//module.exports.nonErrorCallbackExample();
-//module.exports.noThreadExample();
-//module.exports.threadExample();
-//module.exports.asyncErrorExample();
+
+var example = $async({
+  init: function() {
+    //module.exports.seriesExample({$});
+    //module.exports.parallelExample({$});
+    //module.exports.nonErrorCallbackExample({$});
+    //module.exports.noThreadExample();
+    //module.exports.threadExample({$});
+    module.exports.asyncErrorExample({$});
+    //module.exports.ignoreMultipleCallbackExample({$});
+    //module.exports.timeoutExample({$});
+  }
+});
+
+example.init();
+
 
 
 

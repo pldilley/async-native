@@ -2,7 +2,7 @@
   "name": "async-native",
   "version": "0.1.0",
   "description": "A non-intrusive minimalistic helper for working with asynchronous Javascript",
-  "main": "index.js",
+  "main": "./src/async-native.js",
   "scripts": {
     "test": "./node_modules/.bin/mocha --reporter spec"
   },
@@ -31,7 +31,8 @@
     "url": "https://github.com/brentertz/scapegoat/issues"
   },
   "dependencies": {
-    "paralleljs": "^0.2.1"
+    "paralleljs": "^0.2.1",
+    "performance-now": "^0.2.0"
   },
   "devDependencies": {
     "mocha": "~1.16.2",

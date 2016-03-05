@@ -1,5 +1,8 @@
 /*jslint node: true, evil: true, regexp: true, indent: 2, maxlen: 80*/
 var Parallel = require('paralleljs');
+var Now = require("performance-now");
+
+require("./exceptions");  // Will inject all of the exceptions into "global"
 
 /**
  * async-native
@@ -14,43 +17,6 @@ if (!global) {
   global = window;
 }
 
-/**
- * Error for processing errors
- */
-global.ParseError = function ParseError(message, fnKey) {
-  Error.captureStackTrace(this);
-  var msg = 'async-native - Unable to parse! ' +
-    (fnKey ? '("' + fnKey + '")' : '') + '\n';
-  this.message = msg + '            ' + message;
-  this.name = "ParseError";
-};
-
-/**
- * Error for callback errors
- */
-global.FutureError = function FutureError(message) {
-  Error.captureStackTrace(this);
-  var msg = 'async-native - A callback returned an error\n';
-  this.message = msg + message;
-  this.name = "FutureError";
-};
-
-/**
- * Error for callback errors
- */
-global.ThreadError = function ThreadError(fileName, varName, message, stack) {
-  var msg = 'async-native - Error in "' + fileName + ' (function) --> $:' +
-            varName + ' (thread)"\n';
-  this.message = msg + message;
-  this.originalMessage = '';
-  this.name = "ThreadError";
-  this.stack = '    Internal Thread ' + stack.replace(message, '')
-      .replace(new RegExp('\\$' + varName, 'g'), '$:' + varName);
-};
-
-global.ParseError.prototype = Object.create(Error.prototype);
-global.ThreadError.prototype = Object.create(Error.prototype);
-
 
 /**
  * Must be using a version of node that supports generators or enables them
@@ -62,64 +28,6 @@ try {
     '--harmony_generators');
 }
 
-
-
-/**
- * Relates to newlines and comment cleaning
- * - The actual processing is done with the the function on one line
- * - Comments containing ';' confuse things, so we also remove those
- */
-var NEW_LINE_PLACEHOLDER = '<{NEW_LINE}>';
-var NEWLINE_REGEXP = /<\{NEW_LINE\}>/g;
-var LINE_COMMENTS_WITH_COLON = /\/\/.*?;.*?\n/g;
-var ALL_MULTILINE_COMMENTS = /\/\*(\n|.)*?\*\//g;
-
-/**
- * Relates to placeholders and yields
- * - Placeholders get replaced with callback functions
- * - Yields are replaced after the placeholder's next nearest ';'
- */
-var ASYNC_PLACEHOLDER_REGEXP = /\{(\$[\w\$]+?)\}/;
-var ASYNC_YIELD = '\nyield 1';
-var ASYNC_REPLACE_RENDERER =
-  function ASYNC_REPLACE_RENDERER(fnName, id, ignoreMultipleCallback) {
-    return 'function callback_' + fnName + '_' + id + '(e, r) { ' +
-           '$1 = r; ' +
-           'callbackAsyncNative(e, __it, ' + id + ', "$1", ' +
-           !!ignoreMultipleCallback + ');' +
-           '}';
-  };
-
-
-/**
- * Relates to wrapping the function up into a Generator and validation
- */
-var FUNCTION_FIND_REGEXP = /function.*?\{/g;
-var FUNCTION_REGEXP = /(function.*?\{)/;
-var FUNCTION_GENERATOR = function(fnName) {
-  return '\nfunction* yielder_' + fnName + '() { ';
-};
-var FUNCTION_ITERATOR = function(fnName) {
-  return '\n__it = yielder_' + fnName + '.apply(this, arguments);' +
-  '\n__it.complete = [];' +
-  '\n__it.next();\n}\n';
-};
-
-
-var THREAD_REGEXP = /\$\:(.+?)[ \t]+=>[ \t]+\{/;
-var THREAD_RENDERER = function THREAD_RENDERER(fnName, varName, code) {
-  return 'threadAsyncNative(' +
-      '"' + fnName + '", "' + varName + '", ' +
-      'function $' + varName + '(' + varName + ') {\n' +
-        'try ' + code +
-        '\ncatch(e) {\n' +
-          'return { __asyncError: e.message, stack: e.stack };\n' +
-        '}\n' +
-      '}, ' +
-      varName + ', ' +
-      '{$__THREAD});\n' +
-      '$' + varName + '=$__THREAD';
-};
 
 /**
  * Global function to help restart Iterators after a callback completes
@@ -136,11 +44,18 @@ global.callbackAsyncNative = function callbackAsyncNative(e, __it, id, varName) 
         __it.next();
       } else if (e instanceof global.ThreadError) {
         __it.throw(e);
+      } else if (e instanceof global.TimeoutError) {
+        __it.throw(new global.TimeoutError(__it.fnName +
+                           ' (function) --> {' + varName + '} (callback)') );
       } else {
         var eIsErr = e instanceof Error;
-        var error = new global.FutureError(eIsErr ? e.message : e);
+        var error = new global.FutureError(eIsErr ? e.message : e,
+          __it.fnName + ' (function) --> {' + varName + '} (callback)');
+
         error.stack = e.stack;
-        error.prototype = eIsErr ? e.prototype : Object.create(Error.prototype);
+        if (eIsErr && e.prototype) {
+          error.prototype = e.prototype;
+        }
         __it.throw(error);
       }
       __it.complete.push(id);
@@ -155,25 +70,31 @@ global.callbackAsyncNative = function callbackAsyncNative(e, __it, id, varName) 
         throw asyncNativeError;
       }
     }
-  } else {
-    // TODO MAKE CONDITIONAL - ALLOW IGNORE OPTION
+  } else if (varName !== '$') {
     throw new global.FutureError('The same callback was called twice', varName);
   }
+};
+
+// TODO DOCUMENT
+global.anonymousCallbackAsyncNative = function anonymousCallbackAsyncNative(callback) {
+  callback.isAnonymousAsyncNative = true;
+  return callback;
 };
 
 /**
  * Global function to help start threads
  *
- * @param  {Function} fn                The function to start in a thread
+ * @param  {Function} fn                The function to start in a thread  //TODO FIX
  * @param  {JSON} data                  Json like data (objects, arrays, etc)
  * @param  {Function} callback          Callback once complete with the result
  * @throws {ThreadError | Error}        If the callback is passed an error (or one bubbles up)
  */
 global.threadAsyncNative =
-  function threadAsyncNative(fileName, varName, fn, data, callback) {
+  function threadAsyncNative(fnName, varName, fn, data, callback) {
     new Parallel(data).spawn(fn).then(function(result) {
+      console.log(result.__ow);
       if (result.__asyncError) {
-        var err = new global.ThreadError(fileName, varName,
+        var err = new global.ThreadError(fnName, varName,
                                          result.__asyncError, result.stack);
         callback(err, null);
       } else {
@@ -194,8 +115,6 @@ module.exports = {
    * @param  {Function} evalFn    A specific function that returns eval's result
    * @param  {boolean} options    An object of supported options:
    *                                * outputConvertedFns - print out converted options
-   *                                * ignoreMultipleCallback - don't error on multiple callback calls
-   *                                * postProcessor - a method that does extra processing to the string code of a function
    * @return {Object} register    register function bound to the passed function
    * @throws {ParseError}         If the passed function is not a function
    */
@@ -214,6 +133,8 @@ module.exports = {
       // Return a customised function if we have a successful eval function
       var processFn = process.bind({ evalFn: evalFn, options: options });
       processFn.noError = noError;
+      processFn.timeout = timeout;
+      processFn.ignoreMultipleCallback = ignoreMultipleCallback;
       return processFn;
     } else {
       throw new global.ParseError('"eval" function is not a function:\n\n' +
@@ -233,6 +154,12 @@ module.exports = {
  * @param  {Object} evalFn   The object containing async functions
  */
 function process(obj) {
+  var isDebugOfTimes = this.options && this.options.outputTimesOfFns;
+  if (isDebugOfTimes) {
+    isDebugOfTimes = Now();
+  }
+
+
   for (var itemName in obj) {
     if (HELPERS._isFunction(obj[itemName])) {
       var fnString = obj[itemName].toString();
@@ -241,20 +168,23 @@ function process(obj) {
       if (fnString.match(ASYNC_PLACEHOLDER_REGEXP) ||
           fnString.match(THREAD_REGEXP)) {
 
-        var newCode = rewriteFunction(itemName, fnString,
-            this.options && this.options.ignoreMultipleCallback);
+        var startTime = isDebugOfTimes ? Now() : 0;
 
-        if (this.options && HELPERS._isFunction(this.options.postProcessor)) {
-          newCode = this.options.postProcessor(itemName, newCode);
-        }
-
+        var newCode = rewriteFunction(itemName, fnString);
         obj[itemName] = this.evalFn('(' + newCode + ')');
 
         if (this.options && this.options.outputConvertedFns) {
           HELPERS._debugFunction(obj[itemName]);
         }
+        if (isDebugOfTimes) {
+          console.log(itemName, (Now() - startTime).toFixed(3), 'ms');
+        }
       }
     }
+  }
+
+  if (isDebugOfTimes) {
+    console.log('TOTAL', (Now() - isDebugOfTimes).toFixed(3), 'ms');
   }
 
   return obj;
@@ -276,13 +206,62 @@ function noError(callback) {
 }
 
 /**
+ * Produces a wrapper callback to handle callbacks with just one result parameter
+ *
+ * @param   {Function} callback  The original callback as produced by async-native
+ * @returns {Function}           The wrapper callback
+ */
+function ignoreMultipleCallback(callback) {
+  /**
+   * @param  {String} res     The response from the developer
+   */
+  var handler = function ignoreMultipleCallback_handler(err, res) {
+    if (!handler.asyncHasExecuted) {
+      handler.asyncHasExecuted = true;
+
+      if (handler.timer) {
+        clearTimeout(handler.timer);
+      }
+
+      callback(err, res);
+    }
+  };
+
+  return handler;
+}
+
+/**
+ * Produces a wrapper callback to handle callbacks with just one result parameter
+ *
+ * @param   {Function} callback  The original callback as produced by async-native
+ * @returns {Function}           The wrapper callback
+ */
+function timeout(callback, milliseconds) {
+  /**
+   * @param  {String} res     The response from the developer
+   */
+
+  var handler = ignoreMultipleCallback(callback);
+
+  var timer = setTimeout(function() {
+    handler(new global.TimeoutError(), null);
+  }, milliseconds);
+
+  handler.timer = timer;
+
+  return handler;
+}
+
+
+
+/**
  * Rewrites a specific function string into a Generator
  *
  * @param  {String} fnName    The name (or key) of the function
  * @return {String} fnString  The string source of the function
  * @returns {String}          The string result of processing the function
  */
-function rewriteFunction(fnName, fnString, ignoreMultipleCallback) {
+function rewriteFunction(fnName, fnString) {
   // All the source could be on one line potentially, so let's always do it
   var asyncVarList = ['__it'];
   var fnCollapsed = HELPERS.cleanNewLineAndComments(fnString);
@@ -290,8 +269,7 @@ function rewriteFunction(fnName, fnString, ignoreMultipleCallback) {
   fnCollapsed = HELPERS.rewriteThreads(fnName, fnCollapsed, asyncVarList);
   HELPERS.validateNoAsyncNestedFunctions(fnName, fnCollapsed);
 
-  fnCollapsed = HELPERS.rewritePlaceholders(fnName, fnCollapsed, asyncVarList,
-                                            ignoreMultipleCallback);
+  fnCollapsed = HELPERS.rewritePlaceholders(fnName, fnCollapsed, asyncVarList);
   fnCollapsed = HELPERS.transformFnToGenerator(fnName, fnCollapsed,
                                                asyncVarList);
 
@@ -399,7 +377,7 @@ var HELPERS = {
    * @return {Array<String>} asyncVarList     Array to append variable names to
    * @returns {String}                        The processing string result
    */
-  rewritePlaceholders: function rewritePlaceholders(fnName, fnStr, asyncVarList, ignoreMultipleCallback) {
+  rewritePlaceholders: function rewritePlaceholders(fnName, fnStr, asyncVarList) {
     var match;
     var i = 0;
 
@@ -407,6 +385,7 @@ var HELPERS = {
       i++;
       var matchIndex = fnStr.indexOf(match[0]);
       var afterPlaceholderParts = fnStr.substring(matchIndex).split(';');
+      var varName = match[1];
 
       // There must be a colon after the placeholder, otherwise the programmer
       // has messed up
@@ -414,18 +393,28 @@ var HELPERS = {
         throw new global.ParseError('No semicolon after ' + match[0], fnName);
       }
 
-      // Add the matched variable (without brackets) to a definition list
-      HELPERS._addToArray(asyncVarList, match[1]);
-
       // Insert yield after the first colon found, after the placeholder
       afterPlaceholderParts.splice(1, 0, ASYNC_YIELD);
       fnStr = fnStr.substring(0, matchIndex) + afterPlaceholderParts.join(';');
 
-      // Replace the placeholder with a callback
-      fnStr = fnStr.replace(
-        ASYNC_PLACEHOLDER_REGEXP,
-        ASYNC_REPLACE_RENDERER(fnName, i, ignoreMultipleCallback)
-      );
+      if (varName !== "$") {
+        // Add the matched variable (without brackets) to a definition list
+        HELPERS._addToArray(asyncVarList, varName);
+
+        // Replace the placeholder with a callback
+        fnStr = fnStr.replace(
+          ASYNC_PLACEHOLDER_REGEXP,
+          ASYNC_REPLACE_RENDERER(fnName, i)
+        );
+      } else {
+        // Replace the placeholder with a callback
+        fnStr = fnStr.replace(
+          ASYNC_PLACEHOLDER_REGEXP,
+          'anonymousCallbackAsyncNative(' +
+            ASYNC_REPLACE_RENDERER(fnName, i) +
+          ')'
+        );
+      }
     }
 
     return fnStr;
@@ -442,6 +431,13 @@ var HELPERS = {
     function transformFnToGenerator(fnName, fnCollapsed, asyncVarList) {
       var wrappedFn = fnCollapsed.replace(FUNCTION_REGEXP, '$1' +
         '\nvar ' + asyncVarList.join(', ') + ';' + FUNCTION_GENERATOR(fnName));
+
+      if (wrappedFn.charAt(wrappedFn.length - 1) === "}") {
+        wrappedFn = wrappedFn.substring(0, wrappedFn.length - 1) +
+                    FUNCTION_AUTO_CALLBACKER + "}";
+      } else {
+        throw new global.ParseError('Internal error ("}" not found)', fnName);
+      }
 
       return wrappedFn + FUNCTION_ITERATOR(fnName);
     },
