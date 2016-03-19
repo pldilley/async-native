@@ -1,7 +1,3 @@
-if (!global) {
-  global = window;
-}
-
 /**
  * Error for processing errors
  */

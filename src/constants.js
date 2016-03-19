@@ -1,4 +1,11 @@
 module.exports = {
+  // For responders
+  GLOBAL_FUNCTION_LABELS: {
+    ASYNC_CALLBACK: "ASYNC_CALLBACK_asyncNative",
+    ANONYMOUS_CALLBACK: "ANONYMOUS_CALLBACK_asyncNative",
+    THREAD: "THREAD_asyncNative"
+  },
+  
   NEW_LINE_PLACEHOLDER: '<{NEW_LINE}>',
   NEWLINE_REGEXP: /<\{NEW_LINE\}>/g,
   LINE_COMMENTS_WITH_COLON: /\/\/.*?;.*?\n/g,
@@ -7,9 +14,10 @@ module.exports = {
   ASYNC_PLACEHOLDER_REGEXP: /\{(\$[\w\$]*?)\}/,   // i.e. "{$text}"
   ASYNC_YIELD: '\nyield 1',
   ASYNC_REPLACE_RENDERER: function ASYNC_REPLACE_RENDERER(fnName, id) {
+    var fnLabel = module.exports.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK;
     return 'function callback_' + fnName + '_' + id + '(e, r) { ' +
            'if ("$" !== "$1") $1 = r; ' +
-           'callbackAsyncNative(e, __it, ' + id + ', "$1");' +
+           fnLabel + '(e, __it, ' + id + ', "$1");' +
            '}';
   },
 
@@ -34,7 +42,8 @@ module.exports = {
 
   THREAD_REGEXP: /\$\:(.+?)[ \t]+=>[ \t]+\{/,
   THREAD_RENDERER: function THREAD_RENDERER(fnName, varName, code) {
-    return 'threadAsyncNative(' +
+    var fnLabel = module.exports.GLOBAL_FUNCTION_LABELS.THREAD;
+    return fnLabel + '(' +
         '"' + fnName + '", "' + varName + '", ' +
         'function $' + varName + '(' + varName + ') {\n' +
           'try ' + code +

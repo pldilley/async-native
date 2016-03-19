@@ -174,14 +174,14 @@ module.exports = $async({
 
 var example = $async({
   init: function() {
-    //module.exports.seriesExample({$});
-    //module.exports.parallelExample({$});
-    //module.exports.nonErrorCallbackExample({$});
-    //module.exports.noThreadExample();
-    //module.exports.threadExample({$});
+    module.exports.seriesExample({$});
+    module.exports.parallelExample({$});
+    module.exports.nonErrorCallbackExample({$});
+    module.exports.noThreadExample();
+    module.exports.threadExample({$});
     module.exports.asyncErrorExample({$});
-    //module.exports.ignoreMultipleCallbackExample({$});
-    //module.exports.timeoutExample({$});
+    module.exports.ignoreMultipleCallbackExample({$});
+    module.exports.timeoutExample({$});
   }
 });
 
