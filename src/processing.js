@@ -201,7 +201,7 @@ function rewritePlaceholders(fnName, fnStr, asyncVarList) {
       );
     } else {
       // Replace the placeholder with a callback
-      var fnLabel = Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK;
+      var fnLabel = Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_MARKER;
       fnStr = fnStr.replace(
         Constants.ASYNC_PLACEHOLDER_REGEXP,
         fnLabel + '(' +
@@ -227,7 +227,7 @@ function transformFnToGenerator(fnName, fnCollapsed, asyncVarList) {
 
   if (wrappedFn.charAt(wrappedFn.length - 1) === "}") {
     wrappedFn = wrappedFn.substring(0, wrappedFn.length - 1) +
-                Constants.FUNCTION_AUTO_CALLBACKER + "}";
+      Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK + '(arguments);' + ' }';
   } else {
     throw new global.ParseError('Internal error ("}" not found)', fnName);
   }

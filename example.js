@@ -104,7 +104,7 @@ module.exports = $async({
 
         fibo(fib);
 
-        throw "BOGUS ERROR";
+        //throw "BOGUS ERROR";
 
         return false; //fibo(fib);
       };  /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
@@ -154,7 +154,7 @@ module.exports = $async({
 
     function willCallbackTwice(callback) {
       callback(null, true);
-      callback(null, true);
+      callback(null, false);
     }
 
     // Call a method which will callback twice (usually results in error)

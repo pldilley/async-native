@@ -51,11 +51,20 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] =
   };
 
 // TODO DOCUMENT
-global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK] = 
-  function ANONYMOUS_CALLBACK(callback) {
+global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_MARKER] = 
+  function ANONYMOUS_MARKERK(callback) {
     callback.isAnonymousAsyncNative = true;
     return callback;
   };
+
+global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK] = 
+  function ANONYMOUS_CALLBACK(args) {
+    var callback = args.length > 0 ? args[arguments.length - 1] : null;
+    if (typeof callback === "function" && callback.isAnonymousAsyncNative) {                           
+       callback(null, null);
+    }
+  };
+
 
 /**
  * Global function to help start threads
@@ -66,9 +75,8 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK] =
  * @throws {ThreadError | Error}        If the callback is passed an error (or one bubbles up)
  */
 global[Constants.GLOBAL_FUNCTION_LABELS.THREAD] =
-  function THREAD(fnName, varName, fn, data, callback) {
+  function THREAD(fnName, varName, data, fn, callback) {
     new Parallel(data).spawn(fn).then(function(result) {
-      //console.log(result.__ow);
       if (result.__asyncError) {
         var err = new global.ThreadError(fnName, varName,
                                          result.__asyncError, result.stack);
