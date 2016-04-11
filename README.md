@@ -26,6 +26,10 @@ TODO
 * Event based solution                              [SINCE EVENT ACCEPTS CALLBACK, ALLOW USER TO USE A {$callback}]
 * Add function name signature to methods            [DONE]
 * Generate function names for generated methods     [DONE]
+* How to return something before placeholdering!    [TO DO]
+* What if data does not exist for thread?           [TO DO]
+* What if exception thrown in placeholdered child   [TO DO]
+* 
 
 ## Contributing
 
