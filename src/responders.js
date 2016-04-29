@@ -6,8 +6,11 @@ var Parallel = require('paralleljs');
  *
  * @param  {String | Error} e           The error passed by the callback or null
  * @param  {<Iterator>} asyncIter       Internal: The generator's iterator
+ * @throws:iterator {ThreadError}       If a thread created an error within
+ * @throws:iterator {TimeoutError}      If a timeout occued
  * @throws:iterator {FutureError}       If the callback is passed an error
- * @throws {Error}                      If the callback causes an unknown error
+ * @throws {FutureError}                If the callback was called twice
+ * @throws {Error}                      If an unknown error occurs
  */ 
 global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] = 
   function ASYNC_CALLBACK(e, __it, i, varName) {
@@ -20,10 +23,12 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] =
         } else if (e instanceof global.ThreadError) {
           __it.throw(e);
         } else if (e instanceof global.TimeoutError) {
-          __it.throw(new global.TimeoutError(__it.fnName, varName));
+          __it.throw(new global.TimeoutError(e.asyncFnName || __it.fnName, e.asyncVarName || varName));
         } else {
           var eIsErr = e instanceof Error;
-          var error = new global.FutureError(__it.fnName, varName, eIsErr ? e.message : e + "", e);
+          var errfnName = __it.fnName + ((eIsErr  && e.asyncFnName) ? ('::' + e.asyncFnName) : '');
+          var varErrName = varName + ((eIsErr && e.asyncVarName) ? ('::' + e.asyncVarName) : '');
+          var error = new global.FutureError(errfnName, varErrName, eIsErr ? e.message : e + "", e);
 
           error.stack = e.stack;
           if (eIsErr && e.prototype) {
@@ -55,23 +60,23 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] =
     }
   };
 
-// TODO DOCUMENT
+/**
+ * Global function to help mark a callback as anonamous
+ *
+ * @param  {Function} callback           The callback function to be marked
+ */
 global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_MARKER] = 
   function ANONYMOUS_MARKER(callback, anonymousObj, i) {
-    callback.isAnonymousAsyncNative = true;
-
     if (!anonymousObj[i]) {
       anonymousObj[i] = 0;
     }
 
     anonymousObj[i]++;
-    console.log(anonymousObj[i]);
     var handler = function loop_handler(err, res) {
       // Ensure the callback occurs after all markers have been setup!
       setTimeout(function() {
         if (anonymousObj[i] > 0) {
           anonymousObj[i]--;
-          console.log(anonymousObj[i]);
           if (err) {
             anonymousObj[i] = 0;
             callback(err, null);
@@ -82,39 +87,51 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_MARKER] =
       }, 0);
     };
 
+    handler.isAnonymousAsyncNative = true;
+
     return handler;
   };
 
+/**
+ * Global function to help automatically trigger a callback if the last argument is a callback
+ *
+ * @param  {Function} callback           The callback function to be marked
+ */
 global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK] = 
-  function ANONYMOUS_CALLBACK(args, error) {
+  function ANONYMOUS_CALLBACK(args, error, fnName) {
     var callback = args.length > 0 ? args[args.length - 1] : null;
-    if (typeof callback === "function" && callback.isAnonymousAsyncNative) {                       
-       callback(error || null, null);
+    if (typeof callback === "function" && callback.isAnonymousAsyncNative) { 
+      if (error instanceof Error && error.asyncFnName !== fnName) {
+        error.asyncFnName = '(' + (fnName || '?') + ')' + 
+          (error.asyncFnName  ? ('::' + error.asyncFnName) : '');
+      }                      
+      callback(error || null, null);
     } else if (error) {
       throw error;
     }
   };
 
-
 /**
  * Global function to help start threads
  *
- * @param  {Function} fn                The function to start in a thread  //TODO FIX
- * @param  {JSON} data                  Json like data (objects, arrays, etc)
+ * @param  {String} fnName              The string name of the function
+ * @param  {String} varName             The string name of the variable to be updated
+ * @param  {JSON} data                  Json like data (objects, arrays, etc), passed into the thread
+ * @param  {Function} fn                The function to start in a thread
  * @param  {Function} callback          Callback once complete with the result
  * @throws {ThreadError | Error}        If the callback is passed an error (or one bubbles up)
  */
 global[Constants.GLOBAL_FUNCTION_LABELS.THREAD] =
   function THREAD(fnName, varName, data, fn, callback) {
-    new Parallel(data).spawn(fn).then(function(result) {
+    new Parallel(data).spawn(fn).then(function (result) {
       if (result.__asyncError) {
-        var err = new global.ThreadError(fnName, varName,
-                                         result.__asyncError, result.stack);
+        var err = new global.ThreadError(fnName, varName, result.__asyncError, result.stack);
         callback(err, null);
       } else {
         callback(null, result);
       }
-    }, function(unknownThreadError) {
+    }, function (unknownThreadError) {
+      console.log("An unknown thread error occured. Please report this as a bug!", fnName, varName);
       throw unknownThreadError;  // Should never happen but just in case to terminate everything
     });
   };

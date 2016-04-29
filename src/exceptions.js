@@ -2,11 +2,11 @@
  * Error for processing errors
  */
 global.ParseError = function ParseError(message, fnKey) {
-  Error.captureStackTrace(this);
-  var msg = 'async-native - Unable to parse! ' +
-    (fnKey ? '("' + fnKey + '")' : '') + '\n';
-  this.message = msg + '            ' + message;
-  this.name = "ParseError";
+    Error.captureStackTrace(this);
+    var msg = 'async-native - Unable to parse! ' +
+        (fnKey ? '("' + fnKey + '")' : '') + '\n';
+    this.message = msg + '            ' + message;
+    this.name = "ParseError";
 };
 
 /**
@@ -15,7 +15,7 @@ global.ParseError = function ParseError(message, fnKey) {
 global.FutureError = function FutureError(fnName, varName, message, original) {
   Error.captureStackTrace(this);
   var msg = 'async-native - A callback returned an error: [ ' +
-      ((fnName + ' (function) --> {' + varName + '} (callback)') || '?') + ' ] = ';
+      ((fnName + ' ----> {' + varName + '}') || '?') + ' ] = ';
 
   this.message = msg + message;
   this.name = 'FutureError';
@@ -30,7 +30,7 @@ global.FutureError = function FutureError(fnName, varName, message, original) {
 global.TimeoutError = function TimeoutError(fnName, varName) {
   Error.captureStackTrace(this);
   var msg = 'async-native - A callback timed out: [ ';
-  this.message = msg + ((fnName + ' (function) --> {' + varName + '} (callback)') || '?') + ' ]';
+  this.message = msg + ((fnName + ' ----> {' + varName + '}') || '?') + ' ]';
   this.name = "TimeoutError";
   this.asyncFnName = fnName;
   this.asyncVarName = varName;

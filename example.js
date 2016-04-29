@@ -70,7 +70,7 @@ module.exports = $async({
     console.log('\n\nParallel Loop example:\n');
 
     for (var i=1000; i < 5000; i+=1000) {
-      testSleep(i, {$test})
+      testSleep(i, {$})
     };  /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
 
     // Will print out after 2000 ms only
@@ -195,15 +195,15 @@ module.exports = $async({
 
 
 var example = $async({
-  init: function() {
-      // module.exports.seriesExample({$});
-      //module.exports.parallelExample({$});
+  init: function init() {
+      module.exports.seriesExample({$});
+      module.exports.parallelExample({$});
       module.exports.parallelLoopExample({$});
-      // module.exports.nonErrorCallbackExample({$});
-      // module.exports.noThreadExample();
-      // module.exports.threadExample({$});
-      // module.exports.asyncErrorExample({$});
-      // module.exports.ignoreMultipleCallbackExample({$});
+      module.exports.nonErrorCallbackExample({$});
+      module.exports.noThreadExample();
+      module.exports.threadExample({$});
+      module.exports.asyncErrorExample({$});
+      module.exports.ignoreMultipleCallbackExample({$});
 
     try {
       var hypotheticalResultObj = {};
