@@ -128,4 +128,3 @@ function timeout(callback, milliseconds) {
 
   return handler;
 }
-

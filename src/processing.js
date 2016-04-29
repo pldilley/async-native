@@ -149,7 +149,13 @@ function rewriteThreads(fnName, fnStr, asyncVarList) {
     }
 
     // Add the matched variable (without brackets) to a definition list
-    _addToArray(asyncVarList, '$' + varName);
+    var placeholder = '$' + varName;
+    if (asyncVarList.indexOf(placeholder) === -1) {
+      asyncVarList.push(placeholder);
+    } else {
+      throw new global.ParseError('Cannot reuse any placeholder/threadname result ' + 
+        'variable within the same function: ' + placeholder, fnName);
+    }
 
     // TODO Move to renderer
     code = Constants.THREAD_RENDERER(fnName, varName, code);
@@ -192,7 +198,12 @@ function rewritePlaceholders(fnName, fnStr, asyncVarList) {
 
     if (varName !== "$") {
       // Add the matched variable (without brackets) to a definition list
-      _addToArray(asyncVarList, varName);
+      if (asyncVarList.indexOf(varName) === -1) {
+        asyncVarList.push(varName);
+      } else {
+        throw new global.ParseError('Cannot reuse any placeholder/threadname result ' + 
+          'variable within the same function: ' + varName, fnName);
+      }
 
       // Replace the placeholder with a callback
       fnStr = fnStr.replace(
@@ -206,6 +217,8 @@ function rewritePlaceholders(fnName, fnStr, asyncVarList) {
         Constants.ASYNC_PLACEHOLDER_REGEXP,
         fnLabel + '(' +
           Constants.ASYNC_REPLACE_RENDERER(fnName, i) +
+          ', __it.anonymous, ' + 
+          i +
         ')'
       );
     }
@@ -223,11 +236,12 @@ function rewritePlaceholders(fnName, fnStr, asyncVarList) {
  */
 function transformFnToGenerator(fnName, fnCollapsed, asyncVarList) {
   var wrappedFn = fnCollapsed.replace(Constants.FUNCTION_REGEXP, '$1' +
-    '\nvar ' + asyncVarList.join(', ') + ';' + Constants.FUNCTION_GENERATOR(fnName));
+    '\nvar ' + asyncVarList.join(', ') + ';' + Constants.FUNCTION_GENERATOR(fnName) + '\n try {');
 
   if (wrappedFn.charAt(wrappedFn.length - 1) === "}") {
-    wrappedFn = wrappedFn.substring(0, wrappedFn.length - 1) +
-      Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK + '(arguments);' + ' }';
+    wrappedFn = wrappedFn.substring(0, wrappedFn.length - 1) + '\n  ' +
+      Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK + '(arguments);' + '\n } catch(_e) {\n  ' +
+      Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK + '(arguments, _e);' + '\n }\n}';
   } else {
     throw new global.ParseError('Internal error ("}" not found)', fnName);
   }
@@ -262,12 +276,6 @@ function _findBlock(input, outputBlockStr) {
   }
   return !outputBlockStr ? block
     : (block.start > -1 ? input.substring(block.start, block.end) : '');
-}
-
-function _addToArray(array, item) {
-  if (array.indexOf(item) === -1) {
-    array.push(item);
-  }
 }
 
 function _debugFunction(fn) {

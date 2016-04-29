@@ -10,7 +10,9 @@ var Parallel = require('paralleljs');
  * @throws {Error}                      If the callback causes an unknown error
  */ 
 global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] = 
-  function ASYNC_CALLBACK(e, __it, id, varName) {
+  function ASYNC_CALLBACK(e, __it, i, varName) {
+    var id = (varName !== '$' ? varName : i);
+
     if (__it.complete.indexOf(id) === -1) {
       try {
         if (!e) {
@@ -18,17 +20,16 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] =
         } else if (e instanceof global.ThreadError) {
           __it.throw(e);
         } else if (e instanceof global.TimeoutError) {
-          __it.throw(new global.TimeoutError(__it.fnName +
-                             ' (function) --> {' + varName + '} (callback)') );
+          __it.throw(new global.TimeoutError(__it.fnName, varName));
         } else {
           var eIsErr = e instanceof Error;
-          var error = new global.FutureError(eIsErr ? e.message : e,
-            __it.fnName + ' (function) --> {' + varName + '} (callback)');
+          var error = new global.FutureError(__it.fnName, varName, eIsErr ? e.message : e + "", e);
 
           error.stack = e.stack;
           if (eIsErr && e.prototype) {
             error.prototype = e.prototype;
           }
+
           __it.throw(error);
         }
         __it.complete.push(id);
@@ -46,22 +47,51 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] =
         }
       }
     } else if (varName !== '$') {
-      throw new global.FutureError('The same callback was called twice', varName);
+      throw new global.FutureError(__it.fnName, varName, 
+        '\n\nThe same placeholder was called twice:\n' +
+        '1. For loops, use the anonymous placeholder pattern: "{$}".\n' +
+        '2. Otherwise, the method triggering the placeholder should only callback once.\n' + 
+        '3. If you cannot control the method, use "<async-native>.ignoreMultipleCallback".\n');
     }
   };
 
 // TODO DOCUMENT
 global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_MARKER] = 
-  function ANONYMOUS_MARKERK(callback) {
+  function ANONYMOUS_MARKER(callback, anonymousObj, i) {
     callback.isAnonymousAsyncNative = true;
-    return callback;
+
+    if (!anonymousObj[i]) {
+      anonymousObj[i] = 0;
+    }
+
+    anonymousObj[i]++;
+    console.log(anonymousObj[i]);
+    var handler = function loop_handler(err, res) {
+      // Ensure the callback occurs after all markers have been setup!
+      setTimeout(function() {
+        if (anonymousObj[i] > 0) {
+          anonymousObj[i]--;
+          console.log(anonymousObj[i]);
+          if (err) {
+            anonymousObj[i] = 0;
+            callback(err, null);
+          } else if (anonymousObj[i] === 0) {
+            callback(null, null);
+          }
+        }
+      }, 0);
+    };
+
+    return handler;
   };
 
 global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK] = 
-  function ANONYMOUS_CALLBACK(args) {
-    var callback = args.length > 0 ? args[arguments.length - 1] : null;
-    if (typeof callback === "function" && callback.isAnonymousAsyncNative) {                           
-       callback(null, null);
+  function ANONYMOUS_CALLBACK(args, error) {
+    var callback = args.length > 0 ? args[args.length - 1] : null;
+    if (typeof callback === "function" && callback.isAnonymousAsyncNative) {                       
+       callback(error || null, null);
+    } else if (error) {
+      throw error;
     }
   };
 

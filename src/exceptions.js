@@ -12,36 +12,43 @@ global.ParseError = function ParseError(message, fnKey) {
 /**
  * Error for callback errors
  */
-global.FutureError = function FutureError(message, fnAndVarName) {
+global.FutureError = function FutureError(fnName, varName, message, original) {
   Error.captureStackTrace(this);
   var msg = 'async-native - A callback returned an error: [ ' +
-      (fnAndVarName || '?') + ' ]\n';
+      ((fnName + ' (function) --> {' + varName + '} (callback)') || '?') + ' ] = ';
 
   this.message = msg + message;
-  this.name = "FutureError";
+  this.name = 'FutureError';
+  this.asyncFnName = fnName;
+  this.asyncVarName = varName;
+  this.asyncOriginError = original;
 };
 
 /**
  * Error for callback errors
  */
-global.TimeoutError = function TimeoutError(fnAndVarName) {
+global.TimeoutError = function TimeoutError(fnName, varName) {
   Error.captureStackTrace(this);
-  var msg = 'async-native - A callback timed out [ ';
-  this.message = msg + (fnAndVarName || '?') + ' ]';
+  var msg = 'async-native - A callback timed out: [ ';
+  this.message = msg + ((fnName + ' (function) --> {' + varName + '} (callback)') || '?') + ' ]';
   this.name = "TimeoutError";
+  this.asyncFnName = fnName;
+  this.asyncVarName = varName;
 };
 
 /**
  * Error for callback errors
  */
 global.ThreadError = function ThreadError(fnName, varName, message, stack) {
-  var msg = 'async-native - Error in [ ' + fnName + ' (function) --> $:' +
+  var msg = 'async-native - Thread error in: [ ' + fnName + ' (function) --> $:' +
             varName + ' (thread) ]\n';
   this.message = msg + message;
   this.originalMessage = '';
   this.name = "ThreadError";
   this.stack = '    Internal Thread ' + stack.replace(message, '')
-      .replace(new RegExp('\\$' + varName, 'g'), '$:' + varName);
+                  .replace(new RegExp('\\$' + varName, 'g'), '$:' + varName);
+  this.asyncFnName = fnName;
+  this.asyncVarName = varName;
 };
 
 global.ParseError.prototype = Object.create(Error.prototype);

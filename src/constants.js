@@ -32,6 +32,7 @@ module.exports = {
     return '\n__it = yielder_' + fnName + '.apply(this, arguments);' +
     '\n__it.fnName = "' + fnName + '";' +
     '\n__it.complete = [];' +
+    '\n__it.anonymous = {};' +
     '\n__it.next();' +
     '\n}\n';
   },

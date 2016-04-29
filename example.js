@@ -66,6 +66,17 @@ module.exports = $async({
     console.log('C', $myTest3);
   },
 
+  parallelLoopExample: function () {
+    console.log('\n\nParallel Loop example:\n');
+
+    for (var i=1000; i < 5000; i+=1000) {
+      testSleep(i, {$test})
+    };  /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
+
+    // Will print out after 2000 ms only
+    console.log("DONE TEST");
+  },
+
   nonErrorCallbackExample: function() {
     console.log('\n\No Error Callback example:\n');
     testSleep(1000, $async.noError({$myTestNoError}), true); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
@@ -163,6 +174,17 @@ module.exports = $async({
     console.log("value is " + $callback);
   },
 
+  anonymousErrorHandling: function(hypotheticalResultObj) {
+    console.log('\n\Anonymous Error Handling example:\n');
+
+    testSleep(1, {$myTest1}); /* <-- WILL PAUSE HERE (SEMI-COLON IMPORTANT) */
+
+    // You can throw an error (for anonymous only)
+    throw new Error("POOP");
+
+    hypotheticalResultObj.whatever = true;
+  },
+
   timeoutExample: function() {
     console.log('\n\nTimeout example:\n');
 
@@ -174,14 +196,35 @@ module.exports = $async({
 
 var example = $async({
   init: function() {
-    module.exports.seriesExample({$});
-    module.exports.parallelExample({$});
-    module.exports.nonErrorCallbackExample({$});
-    module.exports.noThreadExample();
-    module.exports.threadExample({$});
-    module.exports.asyncErrorExample({$});
-    module.exports.ignoreMultipleCallbackExample({$});
-    module.exports.timeoutExample({$});
+      // module.exports.seriesExample({$});
+      //module.exports.parallelExample({$});
+      module.exports.parallelLoopExample({$});
+      // module.exports.nonErrorCallbackExample({$});
+      // module.exports.noThreadExample();
+      // module.exports.threadExample({$});
+      // module.exports.asyncErrorExample({$});
+      // module.exports.ignoreMultipleCallbackExample({$});
+
+    try {
+      var hypotheticalResultObj = {};
+      module.exports.anonymousErrorHandling(hypotheticalResultObj, {$});
+    } catch(e) {
+      if (e.asyncFnName === 'anonymousErrorHandling') {
+        console.log('Expected error', e);
+      } else {
+        console.log('Unknown error', e);
+      }
+    }
+
+    try {
+      module.exports.timeoutExample({$});
+    } catch(e) {
+      if (e.asyncFnName === 'timeoutExample') {
+        console.log('Expected error', e);
+      } else {
+        console.log('Unknown error', e);
+      }
+    }
   }
 });
 
