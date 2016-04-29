@@ -101,9 +101,8 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_CALLBACK] =
   function ANONYMOUS_CALLBACK(args, error, fnName) {
     var callback = args.length > 0 ? args[args.length - 1] : null;
     if (typeof callback === "function" && callback.isAnonymousAsyncNative) { 
-      if (error instanceof Error && error.asyncFnName !== fnName) {
-        error.asyncFnName = '(' + (fnName || '?') + ')' + 
-          (error.asyncFnName  ? ('::' + error.asyncFnName) : '');
+      if (error instanceof Error && !error.asyncFnName && fnName) {
+        error.asyncFnName = '(' + fnName + ')';
       }                      
       callback(error || null, null);
     } else if (error) {
