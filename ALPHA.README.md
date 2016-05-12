@@ -1,14 +1,14 @@
-TODO
-
 async-native [![Build Status](https://travis-ci.org/theporchrat/node-simple-chainable.png?branch=master)](https://travis-ci.org/theporchrat/node-simple-chainable)
 =========
 
+#### Contents
+<Add links here>
 
 ## What is async-native?
 It solves the "callback hell" and "thread blocking" problems of NodeJS 
 by providing special syntactical sugar, without blocking the main thread.
 
-NORMAL ORIGINAL WAY (i.e. using callback functions):
+**Normal Original Way** (i.e. using callback functions):
 ```
     reader.readLine('file1.txt', function(err1, lines1) {
         console.log(lines1);
@@ -21,7 +21,7 @@ NORMAL ORIGINAL WAY (i.e. using callback functions):
     });
 ```
     
-NEW WAY (using "placeholders", i.e: {$yourVarName}):
+**New Way** (using "placeholders", i.e: {$yourVarName}):
 ```
     reader.readLine('file1.txt', {$lines1});
     console.log($lines1); 
@@ -34,6 +34,8 @@ NEW WAY (using "placeholders", i.e: {$yourVarName}):
 
 
 ## How to use?
+- **The semi-colons are ESSENTIAL for this to work.
+    You should correctly use semi-colons in your Javascript code.**
 ``` 
     // STEP 1. CREATE "CONVERSION" FUNCTION AT TOP OF FILE - "$async"
     var $async = require('async-native').init(a => eval(a));
@@ -61,46 +63,25 @@ NEW WAY (using "placeholders", i.e: {$yourVarName}):
         }
     });
 ```
-Typically, in NodeJS, you give an asynchronous method your own callback.
-With async-native, you pass a "placeholder" instead: `{$yourVarName}`.
-Your function would then "yield" at the following semi-colon. Once the
-placeholder gets a result, it's accessed via a variable: `$yourVarName`.
+- **You can only use a named placeholder ONCE per function.
+    To see how to work with loops, look further down in these docs.**
+> Typically, in NodeJS, you give an asynchronous method your own callback.
+> With async-native, you pass a "placeholder" instead: `{$yourVarName}`.
+> Your function would then "yield" at the following semi-colon. Once the
+> placeholder gets a result, it's accessed via a variable: `$yourVarName`.
 
-("Yields" means an instance of a function execution is paused, but
-without blocking independent executions of the same or other functions.)
+> ("Yields" means an instance of a function execution is paused, but
+> without blocking independent executions of the same or other functions.)
 
-_ _For "thread blocking", please see the 'What about threads?' section._ _
+_For "thread blocking", please see the 'What about threads?' section._
 
-###### IMPORTANT GOTCHA'S
-- **The semi-colons are ESSENTIAL for this to work.
-    You should correctly use semi-colons in your Javascript code.**
-    
-- **If you are using placeholders or threads, DO NOT use `return`
-    within the same function. Things will break!**
-    
-- **If the callback is meant to happen multiple times, just use a
-    callback. Using placeholders in this case would make the code harder
-    to read.**
-
-###### Expanded Explanation
-> In the above example, step 1 is a formality that should happen at the 
-> top of each file in your project. Step 2 is where the magic happens - 
-> The module.exports object is 'filtered' through the method generated
-> in step 1, the `$async` function, which transforms any placeholders
-> (and threads) into real callbacks.
-> 
-> (Technically, the `$async` function just returns the same object 
-> passed into it, but it's done this way to ensure that all the methods 
-> with placeholders inside them are defiantly converted before they are 
-> actually exported and available to the outside world.)
-
-_ _To see why you need step 1 or how the placeholders work in step 2,
-see the 'How does it work exactly?' section._ _
+_To see why you need step 1 or how the placeholders work in step 2,
+see the 'How does it work exactly?' section._
 
 
 ## Logical Flows
 
-###### Series
+##### Series
 Series = Doing a set of asynchronous actions in a queue, one after the
          other. This is the most common scenario.
 ``` 
@@ -119,7 +100,7 @@ Series = Doing a set of asynchronous actions in a queue, one after the
     });
 ```
 
-###### Parallel
+##### Parallel
 Parallel = Doing a set of asynchronous actions all at the same time, but
            waiting for all of them to complete before continuing.
 ``` 
@@ -138,7 +119,7 @@ Parallel = Doing a set of asynchronous actions all at the same time, but
     });
 ```
 
-###### Simultaneous
+##### Simultaneous
 Simultaneous = Doing a set of asynchronous actions at the same time,
                independent of each other.
 ``` 
@@ -166,67 +147,70 @@ Simultaneous = Doing a set of asynchronous actions at the same time,
 ```
 
 
-## An easier way to yield for your child functions in parent functions
+## The anonymous placeholder
 Code written in your main parent functions won't yield for any child 
-functions that contain placeholders (exactly as in the above section: 
-'Logical Flows - > Simultaneous'.)
+functions that contain placeholders 
+(exactly as in the above section: 'Logical Flows - > Simultaneous'.)
 
 To yield up the execution chain, use the "anonymous placeholder" `{$}`:
 ``` 
     var $async = require('async-native').init(a => eval(a));
     
-    // A. CREATE YOUR CHILD FUNCTIONS CONTAINING PLACEHOLDERS
+    // STEP 1. CREATE YOUR CHILD FUNCTIONS CONTAINING PLACEHOLDERS
     var childFunctions = $async({
         example: function(resultCollectingObject) {
             reader.readLine('file1.txt', {$lines1}); /* Yields at semi-colon until result */
             
             resultCollectingObject.myExampleLines = $lines1;
+
+            // throw new Error('Example of how to throw an error instead');
         }
     });
     
-    // B. USE THE ANONYMOUS PLACEHOLDER IN THE PARENT FUNCTION TO YIELD WHEN A CHILD FUNCTION YIELDS
+    // STEP 2. USE THE ANONYMOUS PLACEHOLDER IN THE PARENT FUNCTION TO YIELD WHEN A CHILD FUNCTION YIELDS
     module.exports = $async({
         mainParent: function() {
             var resultCollectingObject = {};
-            
+
             childFunctions.example(resultCollectingObject, {$}); /* Yields at semi-colon until result */
             
             console.log(resultCollectingObject.myExampleLines);
         }
     });
 ```
-###### IMPORTANT GOTCHA
-- **It works only with child functions containing placeholders or 
-threads. If the child function does not contain any of these, the parent
-function would pause indefinitely.**
+- **It works only with child functions that contain placeholders or threads.
+If the child function does not contain any of these, the parent
+function would pause indefinitely!**
+- **If an error is thrown in the child function, it WILL bubble up to the parent.**
 
-###### Expanded Explanation
-> Any converted functions containing placeholders will automatically
+> Any (and only) converted functions containing placeholders will automatically
 > look for an anonymous placeholder as their last argument. This is so
 > that you don't need to make your child functions manually call a
-> callback. //TODO CAN ERRORS STILL BE THROWN?
+> callback!
 
-_ _To see why you need step 1 or how the placeholders work in step 2,
-see the 'How does it work exactly?' section._ _
+_To see why you need step 1 or how the placeholders work in step 2,
+see the 'How does it work exactly?' section._
 
+
+## Loop handling
+<show how to deal with loops!>
 
 ## Error handling
-Asynchronous methods with your functions could callback with an error 
-instead of a result. In this case, this would cause an actual Javascript
-error in your function of type "FutureError".
+When using placeholders, callback errors are converted into actual Javascript errors.
 ``` 
     var $async = require('async-native').init(a => eval(a));
     
     module.exports = $async({
         example: function() {
             try {
-                reader.readLine('file1.txt', {$lines1}); /* Yields (non-blocking pause) at semi-colon until result */
+                reader.readLine('file1.txt', {$lines1}); /* Yields at semi-colon until result */
                 console.log($lines1);
             } catch (e) {
                 if (e instanceof FutureError) {
                     // If 'reader.readLine' provides an error to the placeholder instead,
                     // it will turn into an actual javascript error here
-                    console.log('Async Error was:', e.message);
+                    console.log('Async Error was:', e.message, e.asyncFnName,
+                                                    e.asyncVarName, e.asyncOriginError);
                 }
             }
         }
@@ -241,8 +225,11 @@ There are a few other types of errors that can occur:
  * TimeoutError: Occurs if a timeout occurs (advanced usage, see down)
 
 
-_ _**What about threads?**_ _
-BLOCKS NODEJS's THREAD:
+## What about threads?
+- **You only need to use these if doing computationally heavy tasks.
+    The placeholders above will NOT block the main thread, they merely
+    pause a single instance of a function execution!**
+**Block's Node JS's Thread** (nothing else can run):
 ```
     module.exports = $async({
         fibThread: function() {
@@ -258,78 +245,69 @@ BLOCKS NODEJS's THREAD:
     }); 
 ```
 
-DOES NOT (by getting NodeJS to spawn a separate thread):    
+**Does Not Block Node JS's Thread** (spawn a separate thread):    
 ```         
     var $async = require('async-native').init(a => eval(a));
     
     module.exports = $async({
         fibThread: function() {
-            // A. DATA TO PASS INSIDE OF THREAD HAS SAME NAME AS THREAD NAME: "yourThreadName"
+            // STEP 1. DATA SOURCE TO PASS INSIDE OF THREAD: "var yourThreadName = ..."
             var fibNumber = 45;
             
             try {
             
-                // B. THREAD IS DEFINED USING THIS SYNACTICAL SUGAR: "$:yourThreadName => {"
-                //    Other variables outside of the thread cannot be accessed (see 'Important Gotchas' below)
+                // STEP 2. THREAD IS DEFINED USING SYNACTICAL SUGAR: "$:yourThreadName => {"
                 $:fibNumber => {
                 
-                    // Expensive computational operation
                     function fibo (n) {
                         return n > 1 ? fibo(n - 1) + fibo(n - 2) : 1;
                     }
             
-                    return fibo(fibNumber); // fibNumber == 45
+                    return fibo(fibNumber); // fibNumber == 45 (other outside vars not accessible!)
                     
                 }; /* Yields at semi-colon until result, but without blocking main thread */
           
-                // C. THREAD ABOVE IS RUN IMMEDIATELY AND YOUR FUNCTION WILL YIELD UNTIL IT GETS A RESULT: "$yourThreadName"
+                // STEP 3. THREAD ABOVE IS RUN IMMEDIATELY, RESULT INJECTED AS: "$yourThreadName"
                 console.log($fibNumber);
                                 
             } catch(e) {
                 if (e instanceof ThreadError) {
                     // If an error occurs inside the thread, this will happen!
-                    console.log('Thread Error was:', e.message);
+                    console.log('Thread Error was:', e.message, e.asyncFnName,
+                                                     e.asyncVarName, e.originalMessage);
                 }
             }
         }
     });    
 ```
+- **Only one variable is COPIED into the thread: The variable with the
+    same name as the thread name. It must be serialisable into JSON.**
 
-###### IMPORTANT GOTCHA'S
+- **Threads operate in an isolated context. This means you will not be 
+    able to access any other variables outside**
+
 - **Arrow functions must be enabled for this to work.
     Modern versions of NodeJS support arrow functions as-is.**
 
 - **The semi-colons are ESSENTIAL for this to work.
     You should correctly use semi-colons in your Javascript code.**
     
-- **Threads operate in an isolated context. This means you will not be 
-    able to access variables outside (see exception in the next point)**
-    
-- **One variable IS copied into the thread: The variable with the same
-    name as the thread name. It must be serialisable into JSON.**
-    
 - **The result returned must be serialisable into JSON.**
 
-- **Errors thrown inside threads will be casted into ThreadError's.**
+- **Errors thrown inside threads will have their error message
+    extracted and show up as ThreadError's in the main thread.**
 
-###### Expanded Explanation
 > The thread has a special syntactical sugar: using 'labels' with 'arrow
 > functions'. The structure looks like this:
 >     $:yourThreadName => {
 >         // throw "Couldn't do it";
 >         return <result>;
 >     };
->
-> To pass input, define a variable as the same name above your thread.
-> To get output, expect a new variable as the same name prepended with a
-> $ symbol. You can wrap the entire thread structure with a try-catch
-> block to get ThreadError's.
 
-_ _To see how threads work: see the 'How does it work exactly?' section._ _
+_To see how threads work: see the 'How does it work exactly?' section._
 
 
-
-_ _**Advanced usage: Promises, listeners, timeouts, <complete list>**_ _
+## Advanced usage: Promises, listeners, timeouts, <complete list>
 
 
 _ _**What are the gotchas?**_ _
@@ -337,7 +315,7 @@ _ _**What are the gotchas?**_ _
 * Speed of using eval once
 * Keeping code simple to avoid problems
 * No embedding nested placeholders
-* Returning within generators, bad things happen
+* Returning/Yielding within generators, not allowed
 
 
 _ _**How does it work exactly?**_ _
