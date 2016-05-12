@@ -10,23 +10,38 @@ module.exports = {
     // Deals with stripping out new lines, line comments with colons and multi-line comments (re-insert new lines post)
     NEW_LINE_PLACEHOLDER: '<{NEW_LINE}>',
     NEWLINE_REGEXP: /<\{NEW_LINE\}>/g,
-    LINE_COMMENTS_WITH_COLON: /\/\/.*?;.*?\n/g,
+    LINE_COMMENTS_WITH_BAD_CHARS: /\/\/.*?(\;|\{\$|\$\:).*?\n/g,
+    LINE_COMMENTS_REPLACE_CHARS: function(match) {
+      return match.replace(/\;/g, '⁏').replace(/\{\$/g, '{ $').replace(/\$\:/g, '$ː');
+    },
     ALL_MULTILINE_COMMENTS: /\/\*(\n|.)*?\*\//g,
+    ALL_MULTILINE_REPLACE: '/* (Multi-line comment stripped out by Async-Native) */',
+    RETURN: /return/g,
+    YIELD: /yield/g,
+    RETURN_PLACEHOLDER: '<{"ret-urn"}>',
+    YIELD_PLACEHOLDER: '<{"yi-eld"}>',
+    WORD_PLACEHOLDER: /<\{"([a-z\-]+?)"\}>/g,
 
     // Deals with replacing and callbacks for placeholders
+    ASYNC_PLACEHOLDER_FRAGMENT_REGEXP: /\([^()]*?\{(\$[\w\$]*?)\}[^()]*?\)/,   // i.e. "(...{$text}...)"
+    ASYNC_THREAD_FRAGMENT_REGEXP: /\{(\$__THREAD_.+?)\}/,   // i.e. "$__THREAD"
+    ASYNC_THREAD_PLACEHOLDER: '$__THREAD',
     ASYNC_PLACEHOLDER_REGEXP: /\{(\$[\w\$]*?)\}/,   // i.e. "{$text}"
-    ASYNC_YIELD: '\nyield 1',
-    ASYNC_REPLACE_RENDERER: function ASYNC_REPLACE_RENDERER(fnName, id) {
+    ASYNC_GOOD_PLACEHOLDER_CHAR_COMBOS: /(!==|===|==|!=)/g,
+    ASYNC_BAD_PLACEHOLDER_CHARS: /[=;]/,
+    ASYNC_YIELD: '\n/**/    yield 1',
+    ASYNC_REPLACE_RENDERER: function ASYNC_REPLACE_RENDERER(fnName, varName, id) {
         var fnLabel = module.exports.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK;
-        return 'function callback_' + fnName + '_' + id + '(e, r) { ' +
-            'if ("$" !== "$1") $1 = r; ' +
-            fnLabel + '(e, __it, ' + id + ', "$1");' +
-            '}';
+        return '\n/**/    function placeholder_' + fnName + '_' + id + '(e, r) {\n' +
+            '/**/        if ("$" !== "' + varName + '") ' + varName + ' = r;\n' +
+            '/**/        ' + fnLabel + '(e, __it, arguments.callee, "' + varName + '");\n' +
+            '/**/    }';
     },
 
     // Deals with finding functions and transforming them into generators
     FUNCTION_FIND_REGEXP: /function.*?\{/g,
     FUNCTION_REGEXP: /(function.*?\{)/,
+    FUNCTION_PLACEHOLDER: 'function',
     FUNCTION_GENERATOR: function (fnName) {
         return '\nfunction* yielder_' + fnName + '() { ';
     },
@@ -47,15 +62,15 @@ module.exports = {
             '(' + '"' + fnName + '", "' + varName + '", ' + varName + ', ' +
             'function $' + varName + '(' + varName + ') {\n' +
             '   try ' + code +
-            '   \ncatch(e) {\n' +
+            '   catch(e) {\n' +
             '       var eIsErr = e instanceof Error;\n' +
             '       return {\n' +
             '           __asyncError: (eIsErr ? e.message : (e + "")),\n' +
             '           stack: (eIsErr ? e.stack : "<none>")\n' +
             '       };\n' +
             '   }\n' +
-            '},\n' +
-            '{$__THREAD});\n' +
-            '$' + varName + '=$__THREAD';
+            '}, ' +
+            '{' + module.exports.ASYNC_THREAD_PLACEHOLDER + '_' + varName + '});\n' +
+            '$' + varName + '=' + module.exports.ASYNC_THREAD_PLACEHOLDER + '_' + varName;
     }
 };

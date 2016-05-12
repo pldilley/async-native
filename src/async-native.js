@@ -3,6 +3,17 @@ if (!global) {
     global = window;
 }
 
+/**
+ * Must be using a version of node that supports generators or enables them
+ *
+ * @throws {ParseError}      Throws an error if Generators ES6 Support is missing
+ */
+try {
+    eval('(function *(){})');
+} catch (err) {
+    throw new global.ParseError('Missing Generators ES6 support', '--harmony_generators');
+}
+
 require("./exceptions");  // Will inject all of the exceptions into "global"
 require("./responders");  // Will inject all the responding fns into "global"
 var Processing = require("./processing"); // Provides processing functions
@@ -14,20 +25,6 @@ var Processing = require("./processing"); // Provides processing functions
  * Licensed under the GPL and LGPL license.
  */
 
-
-
-
-
-/**
- * Must be using a version of node that supports generators or enables them
- *
- * @throws {ParseError}      Throws an error if Generators ES6 Support is missing
- */
-try {
-    eval('(function *(){})');
-} catch (err) {
-    throw new global.ParseError('Missing Generators ES6 support', '--harmony_generators');
-}
 
 
 module.exports = {
@@ -87,7 +84,6 @@ module.exports = {
         processFn.noError = noError;
         processFn.timeout = timeout;
         processFn.ignoreMultipleCallback = ignoreMultipleCallback;
-
         return processFn;
     }
 };

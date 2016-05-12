@@ -13,10 +13,10 @@ var Parallel = require('paralleljs');
  * @throws {Error}                      If an unknown error occurs
  */ 
 global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] = 
-  function ASYNC_CALLBACK(e, __it, i, varName) {
-    var id = (varName !== '$' ? varName : i);
+  function ASYNC_CALLBACK(e, __it, callbackFn, varName) {
+    var placeholder = (varName !== '$' ? varName : callbackFn);
 
-    if (__it.complete.indexOf(id) === -1) {
+    if (__it.complete.indexOf(placeholder) === -1) {
       try {
         if (!e) {
           __it.next();
@@ -30,6 +30,7 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] =
           var varErrName = varName + ((eIsErr && e.asyncVarName) ? ('::' + e.asyncVarName) : '');
           var error = new global.FutureError(errfnName, varErrName, eIsErr ? e.message : e + "", e);
 
+          // TODO Could these collude to result in much less than helpful errors?
           error.stack = e.stack;
           if (eIsErr && e.prototype) {
             error.prototype = e.prototype;
@@ -37,7 +38,7 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] =
 
           __it.throw(error);
         }
-        __it.complete.push(id);
+        __it.complete.push(placeholder);
       } catch(asyncNativeError) {
         // A TypeError happens if the callback is immediately called in the same
         // call stack that the asynchronous function was called. The yield has to
@@ -45,7 +46,7 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK] =
         if (asyncNativeError instanceof TypeError) {
           setTimeout(
             global[Constants.GLOBAL_FUNCTION_LABELS.ASYNC_CALLBACK].bind(
-              this, e, __it, id, varName
+              this, e, __it, callbackFn, varName
             ), 0);
         } else {
           throw asyncNativeError;
@@ -75,14 +76,12 @@ global[Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_MARKER] =
     var handler = function loop_handler(err, res) {
       // Ensure the callback occurs after all markers have been setup!
       setTimeout(function() {
-        if (anonymousObj[i] > 0) {
-          anonymousObj[i]--;
-          if (err) {
-            anonymousObj[i] = 0;
-            callback(err, null);
-          } else if (anonymousObj[i] === 0) {
-            callback(null, null);
-          }
+        anonymousObj[i]--;
+        if (err) {
+          anonymousObj[i] = 0;
+          callback(err, null);
+        } else if (anonymousObj[i] < 1) {
+          callback(null, null);
         }
       }, 0);
     };

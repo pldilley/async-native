@@ -11,6 +11,7 @@ module.exports = {
    * @return {Object} obj      The same object passed in, with any modifications made if necessary
    */
   process: function process(obj) {
+    var isSkipReturnYieldCheck = this.options && this.options.skipReturnYieldCheck;
     var isDebugOfTimes = this.options && this.options.outputTimesOfFns;
     if (isDebugOfTimes) isDebugOfTimes = Now();
 
@@ -22,8 +23,17 @@ module.exports = {
         if (fnString.match(Constants.ASYNC_PLACEHOLDER_REGEXP) || fnString.match(Constants.THREAD_REGEXP)) {
           var startTime = isDebugOfTimes ? Now() : 0;
 
-          var newCode = rewriteFunction(itemName, fnString);
-          obj[itemName] = this.evalFn('(' + newCode + ')');
+          var newCode = rewriteFunction(itemName, fnString, isSkipReturnYieldCheck);
+
+          try {
+            obj[itemName] = this.evalFn('(' + newCode + ')');
+          } catch(e) {
+            var parseError = new global.ParseError('\n\nInternal Parse Error, could not convert:\n' +
+              '::::::::::::::::::::::::::::::::::::::::\n\n' + newCode +
+              '\n::::::::::::::::::::::::::::::::::::::::\n', itemName);
+
+            throw parseError;
+          }
 
           if (this.options && this.options.outputConvertedFns) _debugFunction(obj[itemName]);
           if (isDebugOfTimes) console.log(itemName, (Now() - startTime).toFixed(3), 'ms');
@@ -54,17 +64,21 @@ module.exports = {
  * @param  {String} fnString  The string source of the function
  * @returns {String}          The string result of processing the function
  */
-var rewriteFunction = function rewriteFunction(fnName, fnString) {
+var rewriteFunction = function rewriteFunction(fnName, fnString, isSkipReturnYieldCheck) {
   var asyncVarList = ['__it'];
   var fnCollapsed = cleanNewLineAndComments(fnString);        // Puts all source onto one line only
 
   fnCollapsed = rewriteThreads(fnName, fnCollapsed, asyncVarList);
+
+  if (!isSkipReturnYieldCheck) {
+    validateNoReturnsOrYieldsunctions(fnName, fnCollapsed);
+  }
   validateNoAsyncNestedFunctions(fnName, fnCollapsed);
 
   fnCollapsed = rewritePlaceholders(fnName, fnCollapsed, asyncVarList);
   fnCollapsed = transformFnToGenerator(fnName, fnCollapsed, asyncVarList);
 
-  return uncleanNewLines(fnCollapsed);
+  return uncleanCode(fnCollapsed);
 };
 
 
@@ -77,9 +91,9 @@ var rewriteFunction = function rewriteFunction(fnName, fnString) {
  * @return {String}                         The sanatised string
  */
 function cleanNewLineAndComments(fnString) {
-  return fnString.replace(Constants.LINE_COMMENTS_WITH_COLON, '')
+  return fnString.replace(Constants.LINE_COMMENTS_WITH_BAD_CHARS, Constants.LINE_COMMENTS_REPLACE_CHARS)
                  .replace(/\n/g, Constants.NEW_LINE_PLACEHOLDER)
-                 .replace(Constants.ALL_MULTILINE_COMMENTS, '');
+                 .replace(Constants.ALL_MULTILINE_COMMENTS, Constants.ALL_MULTILINE_REPLACE);
 }
 
 /**
@@ -94,7 +108,7 @@ function cleanNewLineAndComments(fnString) {
 function rewriteThreads(fnName, fnStr, asyncVarList) {
   var match;
 
-  while ((match = fnStr.match(Constants.THREAD_REGEXP))) {
+  while (match = fnStr.match(Constants.THREAD_REGEXP)) {
     var varName = match[1];
     var threadIdx = fnStr.indexOf(match[0]);
     var threadStr = fnStr.substring(threadIdx);
@@ -116,11 +130,31 @@ function rewriteThreads(fnName, fnStr, asyncVarList) {
     }
 
     code = Constants.THREAD_RENDERER(fnName, varName, code);
+    code = code.replace(Constants.RETURN, Constants.RETURN_PLACEHOLDER);
+    code = code.replace(Constants.YIELD, Constants.YIELD_PLACEHOLDER);
 
     fnStr = fnStr.substring(0, threadIdx) + code + threadStr.substring(idxs.end);
   }
 
   return fnStr;
+}
+
+/**
+ * Checks that there are no mentions of return or yield
+ *
+ * @param  {String} fnName                  The name (or key) of the function
+ * @param  {String} fnCollapsed             The string source of the function
+ * @throws {ParseError}                     Throws an error if the passed cost contained nested functions with placeholders
+ */
+function validateNoReturnsOrYieldsunctions(fnName, fnCollapsed) {
+  if (fnCollapsed.indexOf("return") > -1 || fnCollapsed.indexOf("yield") > -1) {
+      throw new global.ParseError('\n\nFunctions with placeholders cannot contain the ' +
+        'word "return" or "yield" (except for threads):\n' + 
+        '1. If using them in strings or comments, please break them up.\n' +
+        '2. If using them in inner functions, move inner functions outside (this will be fixed soon).\n' +
+        '3. If you must use them, add "skipReturnYieldCheck: true" to the init options (see the docs).\n',
+        fnName);
+  }
 }
 
 /**
@@ -151,6 +185,27 @@ function validateNoAsyncNestedFunctions(fnName, fnCollapsed) {
 }
 
 /**
+ * Checks that there are no illegal characters around the placeholder
+ *
+ * @param  {String} fnName                  The name (or key) of the function
+ * @param  {String} fnCollapsed             The string source of the function
+ * @throws {ParseError}                     Throws an error if the passed cost contained nested functions with placeholders
+ */
+function validatePlaceholderPlacement(fnName, varName, fnCollapsed, testRegEx) {
+    var badPlaceholder = fnCollapsed.match(testRegEx);
+    if (badPlaceholder) {
+      varName = varName || badPlaceholder[1];
+
+      throw new global.ParseError('\n\nIt appears that the placeholder "{' + varName + '}" ' +
+        'is not being used correctly:\n' +
+        '1. You can only use placeholders as parameters within function calls\n' +
+        '2. All other parameters must NOT contain these chars (use them beforehand): ( ) ; =\n' +
+        '3. If you really must break this rule (please don\'t), do the following: "({' + varName + '})"\n',
+        fnName);
+    }
+}
+
+/**
  * Rewrites all of the placeholder into callbacks and adds the yield keywords
  * at the next proceeding ';' after each placeholder
  *
@@ -162,23 +217,31 @@ function validateNoAsyncNestedFunctions(fnName, fnCollapsed) {
  */
 function rewritePlaceholders(fnName, fnStr, asyncVarList) {
   var match;
-  var i = 0;
+  var anonymousIndex = 0;
 
-  while ((match = fnStr.match(Constants.ASYNC_PLACEHOLDER_REGEXP))) {
-    i++;
-    var matchIndex = fnStr.indexOf(match[0]);
-    var afterPlaceholderParts = fnStr.substring(matchIndex).split(';');
+  while ((match = ( fnStr.match(Constants.ASYNC_THREAD_FRAGMENT_REGEXP) || 
+      fnStr.match(Constants.ASYNC_PLACEHOLDER_FRAGMENT_REGEXP) ))) {
+
     var varName = match[1];
 
-    // There must be a colon after the placeholder, otherwise the programmer
-    // has messed up
-    if (afterPlaceholderParts.length < 2) {
+    validatePlaceholderPlacement(
+      fnName, varName,
+      match[0].replace(Constants.ASYNC_GOOD_PLACEHOLDER_CHAR_COMBOS, ''), 
+      Constants.ASYNC_BAD_PLACEHOLDER_CHARS
+    );
+
+    var matchIndex = fnStr.indexOf(match[0]);
+    var varIndex = fnStr.indexOf('{' + varName + '}', matchIndex);
+    var placeholderParts = fnStr.substring(varIndex).split(';');
+
+    // There must be a colon after the placeholder, otherwise the programmer has messed up
+    if (placeholderParts.length < 2) {
       throw new global.ParseError('No semicolon after ' + match[0], fnName);
     }
 
     // Insert yield after the first colon found, after the placeholder
-    afterPlaceholderParts.splice(1, 0, Constants.ASYNC_YIELD);
-    fnStr = fnStr.substring(0, matchIndex) + afterPlaceholderParts.join(';');
+    placeholderParts.splice(1, 0, Constants.ASYNC_YIELD);
+    fnStr = fnStr.substring(0, varIndex) + placeholderParts.join(';');
 
     if (varName !== "$") {
       // Add the matched variable (without brackets) to a definition list
@@ -189,24 +252,27 @@ function rewritePlaceholders(fnName, fnStr, asyncVarList) {
           'variable within the same function: ' + varName, fnName);
       }
 
-      // Replace the placeholder with a callback
-      fnStr = fnStr.replace(
-        Constants.ASYNC_PLACEHOLDER_REGEXP,
-        Constants.ASYNC_REPLACE_RENDERER(fnName, i)
-      );
+      placeholderParts = Constants.ASYNC_REPLACE_RENDERER(fnName, varName, varName) + '\n';
+
     } else {
-      // Replace the placeholder with a callback
-      var fnLabel = Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_MARKER;
-      fnStr = fnStr.replace(
-        Constants.ASYNC_PLACEHOLDER_REGEXP,
-        fnLabel + '(' +
-          Constants.ASYNC_REPLACE_RENDERER(fnName, i) +
+      anonymousIndex++;
+
+      placeholderParts = Constants.GLOBAL_FUNCTION_LABELS.ANONYMOUS_MARKER + 
+        '(' +
+          Constants.ASYNC_REPLACE_RENDERER(fnName, varName, 'anonymous_' + anonymousIndex) +
           ', __it.anonymous, ' + 
-          i +
-        ')'
-      );
+          anonymousIndex +
+        ')\n';
     }
+
+    // Replace the placeholder with a callback (re-use of placeholderParts)
+    fnStr = fnStr.substring(0, varIndex) + 
+            placeholderParts +  // placeholderParts was reused just above
+            fnStr.substring(varIndex + varName.length + 2);  //+2 because of the two {} in {$varName}
   }
+
+  // TODO DOCUMENT THIS CAVEAT
+  validatePlaceholderPlacement(fnName, null, fnStr, Constants.ASYNC_PLACEHOLDER_REGEXP);
 
   return fnStr;
 }
@@ -221,6 +287,10 @@ function rewritePlaceholders(fnName, fnStr, asyncVarList) {
  * @throws {ParseError}                     Throws an error if the passed function string does not end with "}"
  */
 function transformFnToGenerator(fnName, fnCollapsed, asyncVarList) {
+  if (fnCollapsed.substring(0, Constants.FUNCTION_PLACEHOLDER.length) !== Constants.FUNCTION_PLACEHOLDER) {
+    throw new global.ParseError('Do not use arrow functions with placeholders inside', fnName);
+  }
+
   var wrappedFn = fnCollapsed.replace(Constants.FUNCTION_REGEXP, '$1' +
     '\nvar ' + asyncVarList.join(', ') + ';' + Constants.FUNCTION_GENERATOR(fnName) + '\n try {');
 
@@ -236,13 +306,17 @@ function transformFnToGenerator(fnName, fnCollapsed, asyncVarList) {
 }
 
 /**
- * UnClean new lines out of a passed string
+ * UnCleans the code of a passed string
  *
  * @param  {String} fnString                The source string
  * @return {String}                         The unsanatised string
  */
-function uncleanNewLines(fnString) {
-  return fnString.replace(Constants.NEWLINE_REGEXP, '\n');
+function uncleanCode(fnString) {
+  return fnString.replace(Constants.NEWLINE_REGEXP, '\n')
+    .replace(Constants.WORD_PLACEHOLDER, function(match, word) {
+      return word.replace(/-/g, '');
+    }
+  );
 }
 
 

@@ -3,7 +3,8 @@
 // Import the async-native module like this
 var $async = require('./src/async-native.js').init($ => eval($), {
       outputConvertedFns: true,       // console.log's the converted function source
-      outputTimesOfFns: true         // console.log's the time it took to process the functions
+      outputTimesOfFns: true,         // console.log's the time it took to process the functions
+      skipReturnYieldCheck: false     // Set to true to supress ParseError caused by use of return/yield
     });
 
 // A test function that accepts a delay and a standard Node like callback
@@ -50,6 +51,15 @@ module.exports = $async({
     console.log('exampleFn1', $myTest3);
   },
 
+  seriesLoopExample: function () {
+    console.log('\n\nSeries Loop example:\n');
+
+    for (var i=1000; i < 5000; i+=1000) {
+      testSleep(i, {$}); /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
+      console.log("DONE TEST: " + i + "ms");
+    }
+  },
+
   parallelExample: function () {
     console.log('\n\nParallel example:\n');
 
@@ -58,7 +68,7 @@ module.exports = $async({
       testA: testSleep(2000, {$myTest1}),
       testB: testSleep(1, {$myTest2}),
       testC: testSleep(200, {$myTest3})
-    }; /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
+    };  // <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) 
 
     // Will print out after 2000 ms only
     console.log('A', $myTest1);
@@ -70,10 +80,11 @@ module.exports = $async({
     console.log('\n\nParallel Loop example:\n');
 
     for (var i=1000; i < 5000; i+=1000) {
-      testSleep(i, {$})
+      testSleep(i, {$}),
+      console.log('DOING TEST: ' + i + 'ms')
     };  /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
 
-    // Will print out after 2000 ms only
+    // Will print out after 5000 ms only
     console.log("DONE TEST");
   },
 
@@ -119,7 +130,6 @@ module.exports = $async({
 
         return false; //fibo(fib);
       };  /* <-- WILL PAUSE HERE (THIS SEMI-COLON IS ESSENTIAL) */
-
     } catch (e) {
       // Errors that occur inside the thread can be caught
       if (e instanceof ThreadError) {
@@ -137,7 +147,7 @@ module.exports = $async({
 
   asyncErrorExample: function() {
     // What happens if an error occurs inside the method being called?
-    console.log('\n\nError example:\n');
+    console.log('\n\nAsync Error example:\n');
 
     function willMakeAnError(callback) {
       setTimeout(function() {
@@ -190,26 +200,51 @@ module.exports = $async({
 
     // Make a really long sleep, too long, and we'll have it timeout with an error
     testSleep(2000, $async.timeout({$timeout}, 1000));
+  },
+
+  badIdeas: function() {
+    console.log('\n\n\n\nWhat NOT to do:\n');
+
+    console.log('- Reusing a placeholder via a variable...');
+    // You cannot reuse the same placeholder more than once
+    // var a = {$badIdea},
+    //     b = testSleep(1000, a),
+    //     c = testSleep(1001, a);  
+
+    console.log('- Reusing a named placeholder...');
+    // You cannot repeat the same placeholder more than once
+    // testSleep(1000, {$badIdea});
+    // testSleep(1001, {$badIdea});
+
+    console.log('- Reusing a named placeholder in a loop...');
+    // You cannot reuse the same placeholder more than once
+    // for (var i=0; i < 2; i++) {
+    //   testSleep(1000, {$badIdea});
+    // }
+
+    console.log('- Using a placeholer with a semi-colon after it...');
+    //{$test};  // This has no hope of being called!
   }
 });
 
 
 var example = $async({
   init: function init() {
-      module.exports.seriesExample({$});
-      module.exports.parallelExample({$});
-      module.exports.parallelLoopExample({$});
-      module.exports.nonErrorCallbackExample({$});
-      module.exports.noThreadExample();
-      module.exports.threadExample({$});
-      module.exports.asyncErrorExample({$});
-      module.exports.ignoreMultipleCallbackExample({$});
+    module.exports.seriesExample({$});
+    module.exports.seriesLoopExample({$});
+    module.exports.parallelExample({$});
+    module.exports.parallelLoopExample({$});
+    module.exports.nonErrorCallbackExample({$});
+    module.exports.noThreadExample();
+    module.exports.threadExample({$});
+    module.exports.asyncErrorExample({$});
+    module.exports.ignoreMultipleCallbackExample({$});
 
     try {
       var hypotheticalResultObj = {};
       module.exports.anonymousErrorHandling(hypotheticalResultObj, {$});
     } catch(e) {
-      if (e.asyncFnName === 'anonymousErrorHandling') {
+      if (e.asyncFnName === 'init::(anonymousErrorHandling)') {
         console.log('Expected error', e);
       } else {
         console.log('Unknown error', e);
@@ -225,6 +260,8 @@ var example = $async({
         console.log('Unknown error', e);
       }
     }
+
+    //module.exports.badIdeas({$});
   }
 });
 
