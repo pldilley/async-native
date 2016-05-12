@@ -65,6 +65,7 @@ by providing special syntactical sugar, without blocking the main thread.
 ```
 - **You can only use a named placeholder ONCE per function.
     To see how to work with loops, look further down in these docs.**
+
 > Typically, in NodeJS, you give an asynchronous method your own callback.
 > With async-native, you pass a "placeholder" instead: `{$yourVarName}`.
 > Your function would then "yield" at the following semi-colon. Once the
@@ -181,6 +182,7 @@ To yield up the execution chain, use the "anonymous placeholder" `{$}`:
 - **It works only with child functions that contain placeholders or threads.
 If the child function does not contain any of these, the parent
 function would pause indefinitely!**
+
 - **If an error is thrown in the child function, it WILL bubble up to the parent.**
 
 > Any (and only) converted functions containing placeholders will automatically
@@ -229,6 +231,7 @@ There are a few other types of errors that can occur:
 - **You only need to use these if doing computationally heavy tasks.
     The placeholders above will NOT block the main thread, they merely
     pause a single instance of a function execution!**
+    
 **Block's Node JS's Thread** (nothing else can run):
 ```
     module.exports = $async({
