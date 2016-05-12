@@ -4,7 +4,7 @@ async-native [![Build Status](https://travis-ci.org/theporchrat/node-simple-chai
 =========
 
 
-## What does async-native do?
+## What is async-native?
 It solves the "callback hell" and "thread blocking" problems of NodeJS 
 by providing special syntactical sugar, without blocking the main thread.
 
@@ -23,46 +23,42 @@ NORMAL ORIGINAL WAY (i.e. using callback functions):
     
 NEW WAY (using "placeholders", i.e: {$yourVarName}):
 ```
-    reader.readLine('file1.txt', {$lines1}); /* Yields (non-blocking pause) at semi-colon until result */
+    reader.readLine('file1.txt', {$lines1});
     console.log($lines1); 
     
-    reader.readLine('file2.txt', {$lines2}); /* Yields (non-blocking pause) at semi-colon until result */
+    reader.readLine('file2.txt', {$lines2});
     console.log($lines2);
     
     //etc
 ```
 
 
-## How do I use it exactly?
+## How to use?
 ``` 
-    // STEP 1. CREATE A "CONVERSION" FUNCTION AT TOP OF FILE (Pass a wrapper function for eval for context injection)
+    // STEP 1. CREATE "CONVERSION" FUNCTION AT TOP OF FILE - "$async"
     var $async = require('async-native').init(a => eval(a));
     
-    // STEP 2. PASS YOUR EXPORT OBJECT INTO THE "CONVERSION" FUNCTION (Converts on the first level only // TODO FIX THIS)
+    // STEP 2. PASS EXPORTS TO "CONVERSION" FUNCTION - "= $async(...)"
+    // (Converts on the first level only // TODO FIX THIS)
     module.exports = $async({
         example: function() {
             try {
             
-                // STEP 3. MAKE SURE YOU'VE ADDED YOUR PLACEHOLDER (e.g: {$yourVarName}) WHERE YOUR CALLBACK FUNCTION WOULD USUALLY GO
-                reader.readLine('file1.txt', {$lines1}); /* Yields (non-blocking pause) at semi-colon until result */
+                // STEP 3. REPLACE CALLBACKS WITH PLACEHOLDERS (e.g: {$yourVarName})
+                reader.readLine('file1.txt', {$lines1}); /* Yields at semi-colon until result */
                 
-                // STEP 4 - RESULT. RESULT WILL BE AVAILABLE HERE ATER YIELD (in a variable the same name as the placeholder)
+                // STEP 4 - AFTER YIELD, RESULT IS INJECTED (e.g: $yourVarName)
                 console.log($lines1);  
                 
             } catch (e) {
             
-                // STEP 4 - ERROR. THIS IS WHAT WILL HAPPEN IF THE ASYNC METHOD CALLS BACK WITH AN ERROR RATHER THAN A RESULT
+                // STEP 4 - CALLBACK ERRORS BECOME REAL JS ERRORS
                 if (e instanceof FutureError) {
-                    // If 'reader.readLine' provides an error to the placeholder instead,
-                    // it will turn into an actual javascript error here
                     console.log('Async Error was:', e.message);
-                } else {
-                    // etc
                 }
                 
             }
         }
-        // etc
     });
 ```
 Typically, in NodeJS, you give an asynchronous method your own callback.
