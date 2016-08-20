@@ -10,26 +10,26 @@ by providing special syntactical sugar, without blocking the main thread.
 
 **Normal Original Way** (i.e. using callback functions):
 ```
-    reader.readLine('file1.txt', function(err1, lines1) {
+    fs.readFile('file1.txt', function(err1, lines1) {
         console.log(lines1);
         
-        reader.readLine('file2.txt', function(err2, lines2) {
+        fs.readFile('file2.txt', function(err2, lines2) {
             console.log(lines2);
             
-            // etc            
+            // etc - very quickly becomes a callback pyramid
         });                
     });
 ```
     
 **New Way** (using "placeholders", i.e: {$yourVarName}):
 ```
-    reader.readLine('file1.txt', {$lines1});
+    fs.readFile('file1.txt', {$lines1});
     console.log($lines1); 
     
-    reader.readLine('file2.txt', {$lines2});
+    fs.readFile('file2.txt', {$lines2});
     console.log($lines2);
     
-    //etc
+    // etc - stays tidy
 ```
 
 
@@ -40,14 +40,14 @@ by providing special syntactical sugar, without blocking the main thread.
     // STEP 1. CREATE "CONVERSION" FUNCTION AT TOP OF FILE - "$async"
     var $async = require('async-native').init(a => eval(a));
     
-    // STEP 2. PASS EXPORTS TO "CONVERSION" FUNCTION - "= $async(...)"
+    // STEP 2. PASS YOUR EXPORTS OBJECT INSIDE OF THE "CONVERSION" FUNCTION - "= $async(...)"
     // (Converts on the first level only // TODO FIX THIS)
     module.exports = $async({
         example: function() {
             try {
             
                 // STEP 3. REPLACE CALLBACKS WITH PLACEHOLDERS (e.g: {$yourVarName})
-                reader.readLine('file1.txt', {$lines1}); /* Yields at semi-colon until result */
+                fs.readFile('file1.txt', {$lines1}); /* Yields at semi-colon until result */
                 
                 // STEP 4 - AFTER YIELD, RESULT IS INJECTED (e.g: $yourVarName)
                 console.log($lines1);  
@@ -90,10 +90,10 @@ Series = Doing a set of asynchronous actions in a queue, one after the
     
     module.exports = $async({
         example: function() {
-            reader.readLine('file1.txt', {$lines1}); /* Yields at semi-colon until result */
+            fs.readFile('file1.txt', {$lines1}); /* Yields at semi-colon until result */
             console.log($lines1);
             
-            reader.readLine('file2.txt', {$lines2}); /* Yields at semi-colon until result */
+            fs.readFile('file2.txt', {$lines2}); /* Yields at semi-colon until result */
             console.log($lines2);
             
             // etc
@@ -110,8 +110,8 @@ Parallel = Doing a set of asynchronous actions all at the same time, but
     module.exports = $async({
         example: function() {
             var fileReadings = {
-                parallel1: reader.readLine('file1.txt', {$lines1}),
-                parallel2: reader.readLine('file2.txt', {$lines2})
+                parallel1: fs.readFile('file1.txt', {$lines1}),
+                parallel2: fs.readFile('file2.txt', {$lines2})
                 // etc
             };  /* Yields at this SINGLE semi-colon until all of the results */
             
@@ -128,11 +128,11 @@ Simultaneous = Doing a set of asynchronous actions at the same time,
     
     var myExamples = $async({
         line1: function() {
-            reader.readLine('file1.txt', {$lines1}); /* Yields at semi-colon until result */
+            fs.readFile('file1.txt', {$lines1}); /* Yields at semi-colon until result */
             console.log($lines1);
         },
         line2: function() {
-            reader.readLine('file2.txt', {$lines2}); /* Yields at semi-colon until result */
+            fs.readFile('file2.txt', {$lines2}); /* Yields at semi-colon until result */
             console.log($lines2);
         }
     });
@@ -160,11 +160,11 @@ To yield up the execution chain, use the "anonymous placeholder" `{$}`:
     // STEP 1. CREATE YOUR CHILD FUNCTIONS CONTAINING PLACEHOLDERS
     var childFunctions = $async({
         example: function(resultCollectingObject) {
-            reader.readLine('file1.txt', {$lines1}); /* Yields at semi-colon until result */
+            fs.readFile('file1.txt', {$lines1}); /* Yields at semi-colon until result */
             
             resultCollectingObject.myExampleLines = $lines1;
 
-            // throw new Error('Example of how to throw an error instead');
+            // throw new Error('How to callback with an error to the parent instead');
         }
     });
     
@@ -183,6 +183,9 @@ To yield up the execution chain, use the "anonymous placeholder" `{$}`:
 If the child function does not contain any of these, the parent
 function would pause indefinitely!**
 
+- **You have to pass an object or array into the child function in order to
+    collect a result, since asychronous placeholders can't inject any results.**
+
 - **If an error is thrown in the child function, it WILL bubble up to the parent.**
 
 > Any (and only) converted functions containing placeholders will automatically
@@ -195,7 +198,81 @@ see the 'How does it work exactly?' section._
 
 
 ## Loop handling
-<show how to deal with loops!>
+Remember that you cannot use a named placeholder twice, so for looping you must use
+the anonymous placeholder. See the anonymous placeholders seciton above on how to 
+collect results, and look below for examples.
+
+##### Series
+```
+    var $async = require('async-native').init(a => eval(a));
+    
+    module.exports = $async({
+        example: function() {
+            var lines = ['line 1', 'line 2', 'line 3'];
+
+            try {
+
+                for (var i=0; i < lines.length; i++) {
+                    fs.appendFile('message.txt', lines[i], {$}); /* Yields at semi-colon until result */
+                }
+
+            } catch(e) {
+                // if error returned to placeholder, can be caught here
+            }
+        }
+    });
+```
+
+##### Parallel
+```
+    var $async = require('async-native').init(a => eval(a));
+    
+    module.exports = $async({
+        example: function() {
+            var files = ['file1.txt', 'file2.txt', 'file3.txt'];
+
+            try {
+
+                for (var i=0; i < files.length; i++) {
+                    fs.appendFile(files[i], 'Example string', {$}) // NOTE: No semi-colon here!
+                }; /* Yields after all looping at semi-colon until result */
+
+            } catch(e) {
+                // if error returned to placeholder, can be caught here
+            }
+        }
+    });
+```
+
+##### Result Handling
+```
+    var $async = require('async-native').init(a => eval(a));
+    
+    module.exports = $async({
+        readTheFile: function(fileName, resultCollectionObj) {
+            fs.readFile(fileName, {$fileContents}); /* Yields at semi-colon until result */
+
+            resultCollectionObj[fileName] = $fileContents;
+        },
+
+        example: function() {
+            var files = ['file1.txt', 'file2.txt', 'file3.txt'];
+
+            try {
+                var resultCollectionObj = {};
+
+                for (var i=0; i < files.length; i++) {
+                    module.exports.readTheFile(files[i], resultCollectionObj, {$}) // No semi-colon here!
+                }; /* Yields after all looping at semi-colon until result */
+
+                console.log(resultCollectionObj['file2.txt']);
+            } catch(e) {
+                // if error returned to placeholder, can be caught here
+            }
+        }
+    });
+```
+
 
 ## Error handling
 When using placeholders, callback errors are converted into actual Javascript errors.
@@ -231,7 +308,7 @@ There are a few other types of errors that can occur:
 - **You only need to use these if doing computationally heavy tasks.
     The placeholders above will NOT block the main thread, they merely
     pause a single instance of a function execution!**
-    
+
 **Block's Node JS's Thread** (nothing else can run):
 ```
     module.exports = $async({
@@ -319,6 +396,7 @@ _ _**What are the gotchas?**_ _
 * Keeping code simple to avoid problems
 * No embedding nested placeholders
 * Returning/Yielding within generators, not allowed
+* Conflicts with jquery
 
 
 _ _**How does it work exactly?**_ _

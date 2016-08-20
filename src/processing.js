@@ -28,6 +28,8 @@ module.exports = {
           try {
             obj[itemName] = this.evalFn('(' + newCode + ')');
           } catch(e) {
+            //TODO APPEND E!
+            console.log(e.stack);
             var parseError = new global.ParseError('\n\nInternal Parse Error, could not convert:\n' +
               '::::::::::::::::::::::::::::::::::::::::\n\n' + newCode +
               '\n::::::::::::::::::::::::::::::::::::::::\n', itemName);
@@ -79,6 +81,10 @@ var rewriteFunction = function rewriteFunction(fnName, fnString, isSkipReturnYie
   fnCollapsed = transformFnToGenerator(fnName, fnCollapsed, asyncVarList);
 
   return uncleanCode(fnCollapsed);
+};
+
+var stringToFunction = function stringToFunction(sourceCode) {
+  return eval(sourceCode);
 };
 
 
