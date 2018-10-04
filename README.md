@@ -2,6 +2,8 @@
 It solves the "callback hell" and "thread blocking" problems of NodeJS 
 by providing special syntactical sugar, without blocking the main thread.
 
+_Please note: This project is now defunct, having been replaced by async/await that was introduced soon after I started this project_
+
 **Normal Original Way** (i.e. using callback functions):
 ```
     fs.readFile('file1.txt', function(err1, lines1) {
